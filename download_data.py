@@ -9,4 +9,4 @@ path = kagglehub.dataset_download("sgpjesus/bank-account-fraud-dataset-neurips-2
 
 shutil.move(path, "data/bank_account_fraud_dataset.zip")
 
-print("Dataset downloaded and moved to the data folder")   
+print("Dataset downloaded and moved to the data folder")
