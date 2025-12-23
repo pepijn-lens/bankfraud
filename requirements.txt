@@ -3,4 +3,5 @@ numpy
 pandas
 ipykernel
 scikit-learn
-xgboost
+matplotlib
+seaborn
