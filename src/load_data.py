@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
-def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
+
+def preprocess_data(df: pd.DataFrame, normalize: bool = True) -> pd.DataFrame:
     """
     Preprocess the data by:
     - filling in the missing values.
@@ -31,6 +33,60 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     df = pd.get_dummies(df, columns=categorical_types, drop_first=True)
 
     return df
+
+
+def normalize(
+    X_train: pd.DataFrame,
+    X_val: pd.DataFrame,
+    X_test: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, StandardScaler]:
+    """
+    Normalize continuous numerical features using statistics from the training set.
+
+    - Fits a StandardScaler on continuous (non-binary, non-boolean) numeric columns of X_train.
+    - Applies the same transformation to X_train, X_val and X_test.
+    - Leaves binary and boolean / one-hot encoded features unchanged.
+
+    Returns:
+        X_train_scaled, X_val_scaled, X_test_scaled, fitted_scaler
+    """
+
+    # Identify numeric and boolean columns
+    numeric_cols = X_train.select_dtypes(include=[np.number]).columns
+    bool_cols = X_train.select_dtypes(include=["bool"]).columns
+
+    # Detect binary integer columns (only {0,1} in training data, not already bool)
+    binary_int_cols: list[str] = []
+    for col in numeric_cols:
+        if col in bool_cols:
+            continue
+        unique_vals = pd.Series(X_train[col].dropna().unique())
+        if unique_vals.nunique() <= 2 and set(unique_vals.tolist()).issubset({0, 1}):
+            binary_int_cols.append(col)
+
+    # Continuous columns are numeric but not boolean and not binary {0,1}
+    continuous_cols = [
+        col for col in numeric_cols
+        if col not in bool_cols and col not in binary_int_cols
+    ]
+
+    if not continuous_cols:
+        # Nothing to normalize
+        return X_train.copy(), X_val.copy(), X_test.copy(), StandardScaler()
+
+    scaler = StandardScaler()
+    scaler.fit(X_train[continuous_cols])
+
+    # Work on copies to avoid modifying inputs in-place
+    X_train_scaled = X_train.copy()
+    X_val_scaled = X_val.copy()
+    X_test_scaled = X_test.copy()
+
+    X_train_scaled[continuous_cols] = scaler.transform(X_train[continuous_cols])
+    X_val_scaled[continuous_cols] = scaler.transform(X_val[continuous_cols])
+    X_test_scaled[continuous_cols] = scaler.transform(X_test[continuous_cols])
+
+    return X_train_scaled, X_val_scaled, X_test_scaled, scaler
 
 def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
     """
