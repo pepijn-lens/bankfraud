@@ -1,1 +1,1 @@
-from .load_data import preprocess_data, split_data
+from .load_data import preprocess_data, split_data, normalize
