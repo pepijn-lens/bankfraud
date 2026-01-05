@@ -15,7 +15,8 @@ def preprocess_data(df: pd.DataFrame, normalize: bool = True) -> pd.DataFrame:
     for column in ["credit_risk_score", "device_distinct_emails_8w", "session_length_in_minutes", "current_address_months_count"]:
         median_risk_score = df[column].median()
 
-        df[df[column] == -1] = int(median_risk_score)
+        mask = df[column] == -1
+        df.loc[mask, column] = int(median_risk_score)
 
     df = df.drop(columns=["device_fraud_count"])
 
