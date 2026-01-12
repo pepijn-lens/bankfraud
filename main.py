@@ -72,7 +72,6 @@ def run_cross_validation(df, label_col, n_splits=5, seed=42):
                     X_features=X_test,
                     threshold_method=rule["threshold_method"],
                 )
-                # only include static_threshold when needed
                 if rule["threshold_method"] == "static":
                     kwargs["static_threshold"] = rule["static_threshold"]
 
