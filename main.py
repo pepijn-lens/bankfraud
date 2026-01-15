@@ -1,86 +1,155 @@
 import pandas as pd
 import numpy as np
-from sklearn.metrics import precision_recall_curve
-from src.load_data import preprocess_data, split_data, normalize
-from src.models import get_base_model
+from sklearn.model_selection import StratifiedKFold
+from src.load_data import preprocess_data, normalize
+from src.models import get_base_model, get_random_forest
 from src.evaluation import ValueAwareEvaluator
+import matplotlib.pyplot as plt
 
-def find_best_f1_threshold(y_true, y_prob):
-    """Finds the static threshold that maximizes F1 Score."""
-    precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
-    f1_scores = 2 * (precision * recall) / (precision + recall + 1e-9)
-    # Argmax finds the index of the highest F1 score
-    best_idx = np.argmax(f1_scores)
-    return thresholds[best_idx]
+
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", None)
+pd.set_option("display.max_colwidth", None)
+
+CONFIG = {
+    "data_path": "data/2/Base.csv",
+    "naive_threshold": 0.5,
+    "n_splits": 5,
+    "seed": 42,
+}
+
+MODEL_FACTORIES = {
+    "Logistic Regression": get_base_model,
+    "Random Forest": get_random_forest,
+}
+
+DECISION_RULES = [
+    {"decision_rule": "Static (0.5)", "threshold_method": "static", "static_threshold": 0.5},
+    {"decision_rule": "Value-Aware", "threshold_method": "dynamic"},
+]
+
+
+def run_cross_validation(df, label_col, n_splits=5, seed=42):
+    """
+    Stratified K-fold CV. For each fold:
+      - scale using training fold only
+      - fit each model
+      - evaluate two decision rules on the same predicted probabilities
+
+    Returns:
+      results: per-fold results for each (model, decision_rule)
+      summary: mean metrics across folds grouped by (model, decision_rule)
+    """
+    X = df.drop(columns=[label_col])
+    y = df[label_col].to_numpy()
+
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+
+    rows = []
+    evaluator = ValueAwareEvaluator()
+
+    for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), start=1):
+        print("Fold", fold)
+        X_train = X.iloc[train_idx]
+        y_train = y[train_idx]
+        X_test = X.iloc[test_idx]
+        y_test = y[test_idx]
+
+        X_train_scaled, X_test_scaled, _, *_ = normalize(X_train, X_test, X_test)
+
+        for model_name, factory in MODEL_FACTORIES.items():
+            print("Model", model_name)
+            model = factory()
+            model.fit(X_train_scaled, y_train)
+
+            p_test = model.predict_proba(X_test_scaled)[:, 1]
+
+            for rule in DECISION_RULES:
+                print("Rule", rule["decision_rule"])
+                kwargs = dict(
+                    y_true=y_test,
+                    y_pred_prob=p_test,
+                    X_features=X_test,
+                    threshold_method=rule["threshold_method"],
+                )
+                if rule["threshold_method"] == "static":
+                    kwargs["static_threshold"] = rule["static_threshold"]
+
+                res = evaluator.evaluate(**kwargs)
+
+                rows.append({
+                    "fold": fold,
+                    "model": model_name,
+                    "decision_rule": rule["decision_rule"],
+                    **res
+                })
+
+    results = pd.DataFrame(rows)
+
+    metrics_cols = [
+        "Total_Bank_Loss_($)",
+        "Fraud_Loss_($)",
+        "False_Alarm_Cost_($)",
+        "Fraud_Caught_($)",
+        "recall",
+        "accuracy",
+        "f1",
+    ]
+    metrics_cols = [c for c in metrics_cols if c in results.columns]
+
+    summary = (
+        results
+        .groupby(["model", "decision_rule"])[metrics_cols]
+        .mean(numeric_only=True)
+        .sort_values("Total_Bank_Loss_($)")
+    )
+
+    return results, summary
+
+def plot_total_loss_by_model_and_rule(cv_summary):
+    summary = cv_summary.reset_index()
+
+    pivot = summary.pivot(index="model", columns="decision_rule", values="Total_Bank_Loss_($)")
+
+    models = pivot.index.tolist()
+    rules = pivot.columns.tolist()
+
+    x = np.arange(len(models))
+    width = 0.35 if len(rules) == 2 else 0.8 / max(len(rules), 1)
+
+    plt.figure(figsize=(8, 4))
+
+    for j, rule in enumerate(rules):
+        offset = (j - (len(rules) - 1) / 2) * width
+        plt.bar(x + offset, pivot[rule].values, width, label=rule)
+
+    plt.xticks(x, models, rotation=15, ha="right")
+    plt.ylabel("Total Bank Loss ($)")
+    plt.title("Total financial loss by model and decision rule (CV mean)")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 
 def run_experiment():
     print("1. Loading and Preprocessing Data...")
-    # Update path if necessary
-    df = pd.read_csv("data/2/Base.csv") 
-    
+    df = pd.read_csv(CONFIG["data_path"])
     df = preprocess_data(df)
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(df)
-    X_train_scaled, X_val_scaled, X_test_scaled, scaler = normalize(X_train, X_val, X_test)
-    
-    print(f"Data ready. Train shape: {X_train.shape}")
-    
-    # --- MODEL TRAINING ---
-    print("\n2. Training Logistic Regression...")
-    model = get_base_model()
-    model.fit(X_train_scaled, y_train)
-    
-    # Get Probabilities
-    y_prob_val = model.predict_proba(X_val_scaled)[:, 1]
-    y_prob_test = model.predict_proba(X_test_scaled)[:, 1]
-    
-    # --- FIND OPTIMAL STATIC THRESHOLD (Baseline B) ---
-    best_static_thresh = find_best_f1_threshold(y_val, y_prob_val)
-    print(f"Optimal Static Threshold (Based on Val F1): {best_static_thresh:.4f}")
-    
-    # --- VALUE-AWARE EVALUATION ---
-    print("\n3. Fitting Value-Aware Evaluator...")
-    evaluator = ValueAwareEvaluator()
-    evaluator.fit(X_train, y_train)
-    
-    # --- RQ1: Comparison ---
-    print("\n=== RQ1: Total Cost Analysis (Lower is Better) ===")
-    
-    res_naive = evaluator.calculate_savings(y_test, y_prob_test, X_test, threshold_method='static', static_threshold=0.5)
-    res_f1 = evaluator.calculate_savings(y_test, y_prob_test, X_test, threshold_method='static', static_threshold=best_static_thresh)
-    res_dynamic = evaluator.calculate_savings(y_test, y_prob_test, X_test, threshold_method='dynamic')
-    
-    # Create comparison table
-    results_df = pd.DataFrame([res_naive, res_f1, res_dynamic], 
-                              index=['Naive (0.5)', 'Best F1', 'Value-Aware'])
-    
-    # Select columns
-    money_cols = ['Total_Bank_Loss_($)', 'Fraud_Loss_($)', 'False_Alarm_Cost_($)', 'Fraud_Caught_($)']
-    
-    # Print Money Columns (No Decimals)
-    print(results_df[money_cols].round(0))
-    
-    # Print Metrics Columns (4 Decimals) - Added 'accuracy' here
-    print(results_df[['recall', 'accuracy']].round(3))
 
-    # --- RQ2: High Impact Analysis ---
-    print("\n=== RQ2: High Impact Fraud Cases Only ===")
-    whale_mask = X_test['proposed_credit_limit'] >= X_test['proposed_credit_limit'].quantile(0.90)
-    
-    # 1. Naive Baseline (0.5) on Whales
-    whale_res_naive = evaluator.calculate_savings(y_test[whale_mask], y_prob_test[whale_mask], X_test[whale_mask], 
-                                                  threshold_method='static', static_threshold=0.5)
-    
-    # 2. Best F1 Baseline on Whales
-    whale_res_f1 = evaluator.calculate_savings(y_test[whale_mask], y_prob_test[whale_mask], X_test[whale_mask], 
-                                               threshold_method='static', static_threshold=best_static_thresh)
-    
-    # 3. Value-Aware on Whales
-    whale_res_dynamic = evaluator.calculate_savings(y_test[whale_mask], y_prob_test[whale_mask], X_test[whale_mask], 
-                                                    threshold_method='dynamic')
-    
-    print(f" Recall (Naive 0.5):   {whale_res_naive['recall']:.2%}")
-    print(f" Recall (Best F1):     {whale_res_f1['recall']:.2%}")
-    print(f" Recall (Dynamic):     {whale_res_dynamic['recall']:.2%}")
+    cv_results, cv_summary = run_cross_validation(
+        df=df,
+        label_col="fraud_bool",
+        n_splits=CONFIG["n_splits"],
+        seed=CONFIG["seed"],
+    )
+
+    print("\n=== CV Summary (mean across folds) ===")
+    money_cols = ["Total_Bank_Loss_($)", "Fraud_Loss_($)", "False_Alarm_Cost_($)", "Fraud_Caught_($)"]
+    print(cv_summary[money_cols].round(0))
+    print(cv_summary[["recall", "accuracy", "f1"]].round(3))
+
+    plot_total_loss_by_model_and_rule(cv_summary)
+
 
 if __name__ == "__main__":
     run_experiment()

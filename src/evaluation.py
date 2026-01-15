@@ -3,102 +3,134 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 
 class ValueAwareEvaluator:
-    def __init__(self):
-        self.limit_quantiles = None
+    """
+    Evaluator for a cost-sensitive fraud detection.
 
-    def fit(self, X_train, y_train):
-        """
-        Learns the 'Ladder of Value' from legitimate customers in the training set.
-        """
-        # Ensure we are working with standard Series/Arrays
-        if isinstance(y_train, np.ndarray):
-            y_train = pd.Series(y_train)
-            
-        # 1. Filter for legitimate customers only (Label = 0)
-        legit_mask = (y_train == 0)
-        
-        # We need the original indices to align with X_train if it's a dataframe
-        if hasattr(legit_mask, 'values'):
-            legit_mask = legit_mask.values
-            
-        legit_limits = X_train.iloc[legit_mask]['proposed_credit_limit']
+    The evaluator learns how credit limits are distributed among legitimate applicants in the training data.
+    This information is later used to map normalized income scores to proxies for customer value.
+    """
 
-        # 2. Build the Ladder of Value (Quantiles of Limits)
-        # This defines what a "Normal" limit looks like for every percentile
-        self.limit_quantiles = legit_limits.quantile(np.linspace(0, 1, 101))
-        print("Evaluator Fitted: 'Ladder of Value' created from legitimate training data.")
+    def predict_static(self, y_pred_prob, static_threshold: float = 0.5) -> np.ndarray:
+        """RQ1 Binary decisions from probabilities using a fixed threshold."""
+        p = np.asarray(y_pred_prob, dtype=float)
+        return (p >= float(static_threshold)).astype(int)
 
-    def get_proxy_value(self, income_scores):
+    def predict_value_aware(
+            self,
+            y_pred_prob,
+            X,
+            ops_cost=100.0,
+            impact_col="proposed_credit_limit",
+            margin_rate=0.05,
+    ):
         """
-        Maps Income Scores to 'Proxy Limits' (Euros) using the fitted Ladder.
-        """
-        # Clip scores to be safe
-        clipped_scores = np.clip(income_scores, 0, 1)
-        # Convert score (0.9) to index (90)
-        indices = (clipped_scores * 100).astype(int)
-        
-        # specific fix: ensure indices are within bounds 0-100
-        indices = np.clip(indices, 0, 100)
-        
-        quantile_values = self.limit_quantiles.values
-        return quantile_values[indices]
+        RQ2: Value-aware decision rule
 
-    def get_dynamic_thresholds(self, risk_amount, value_amount):
+        Flag if:
+            p_i >= C_FP,i / (C_FP,i + C_FN,i)
         """
-        Calculates the specific threshold T_i = Value / (Risk + Value)
-        """
-        # Added small epsilon (1e-9) to avoid division by zero
-        thresholds = value_amount / (risk_amount + value_amount + 1e-9)
-        return thresholds
+        p = np.asarray(y_pred_prob, dtype=float)
+        credit = X[impact_col].to_numpy(dtype=float)
 
-    def calculate_savings(self, y_true, y_pred_prob, X_features, threshold_method='static', static_threshold=0.5):
-        """
-        Computes financial metrics.
-        """
-        # --- CRITICAL FIX: Convert inputs to Numpy Arrays ---
-        # This drops the Pandas Index, preventing mismatch bugs.
-        if hasattr(y_true, 'values'):
-            y_true = y_true.values
-        if hasattr(y_pred_prob, 'values'):
-            y_pred_prob = y_pred_prob.values
-            
-        # 1. Get Financial Values (Risk & Value)
-        risk_amount = X_features['proposed_credit_limit'].values
-        customer_value = self.get_proxy_value(X_features['income'].values)
-        
-        # 2. Determine Decisions
-        if threshold_method == 'dynamic':
-            # Calculate Dynamic Threshold per person
-            thresholds = self.get_dynamic_thresholds(risk_amount, customer_value)
-            y_pred = (y_pred_prob >= thresholds).astype(int)
-        else:
-            # Standard Static Threshold
-            y_pred = (y_pred_prob >= static_threshold).astype(int)
+        C_fn = credit
+        C_fp = ops_cost + margin_rate * credit
 
-        # --- CALCULATE METRICS ---
-        
-        # TP: Fraud Caught (Good) -> Saved the Risk Amount
-        tp_mask = (y_true == 1) & (y_pred == 1)
-        fraud_caught_val = np.sum(risk_amount[tp_mask])
-        
-        # FN: Fraud Missed (Bad) -> Lost the Risk Amount
-        fn_mask = (y_true == 1) & (y_pred == 0)
-        fraud_loss_val = np.sum(risk_amount[fn_mask])
-        
-        # FP: False Alarm (Bad) -> Lost the Customer Value
-        fp_mask = (y_true == 0) & (y_pred == 1)
-        false_alarm_cost = np.sum(customer_value[fp_mask])
-        
-        # Total Badness (Lower is Better)
-        total_loss = fraud_loss_val + false_alarm_cost
-        
+        threshold = C_fp / (C_fp + C_fn)
+
+        return (p >= threshold).astype(int)
+
+    def fp_loss_proxy(
+            self,
+            X,
+            credit_col="proposed_credit_limit",
+            ops_cost=100.0,
+            margin_rate=0.05
+        ):
+        """
+        Returns False Positive loss = operational costs + margin * credit
+        """
+        credit = X[credit_col].to_numpy(dtype=float)
+        return ops_cost + margin_rate * credit
+
+    def compute_losses(self, y_true, y_pred, X_features, credit_col="proposed_credit_limit", income_col="income") -> dict:
+        """
+        Compute financial losses and error counts given model decisions.
+
+        The method evaluates the outcomes of binary decisions by aggregating:
+        - fraud loss from fraudulent applications that were accepted, and
+        - false alarm cost from legitimate applications that were incorrectly flagged.
+        """
+        y_true = np.asarray(y_true)
+        y_pred = np.asarray(y_pred)
+
+        credit = X_features[credit_col].to_numpy(dtype=float)
+        fp_per_case = self.fp_loss_proxy(
+            X_features,
+            credit_col=credit_col
+        )
+
+        tp = (y_true == 1) & (y_pred == 1)
+        fn = (y_true == 1) & (y_pred == 0)
+        fp = (y_true == 0) & (y_pred == 1)
+
+        fraud_caught = float(np.sum(credit[tp]))
+        fraud_loss = float(np.sum(credit[fn]))
+        false_alarm_cost = float(np.sum(fp_per_case[fp]))
+        total_loss = fraud_loss + false_alarm_cost
+
         return {
-            'threshold_type': 'Dynamic' if threshold_method == 'dynamic' else f'Static ({static_threshold:.2f})',
-            'Total_Bank_Loss_($)': total_loss,
-            'Fraud_Loss_($)': fraud_loss_val,
-            'False_Alarm_Cost_($)': false_alarm_cost,
-            'Fraud_Caught_($)': fraud_caught_val,
-            'recall': recall_score(y_true, y_pred),
-            'accuracy': accuracy_score(y_true, y_pred),
-            'f1': f1_score(y_true, y_pred)
+            "fraud_caught": fraud_caught,
+            "fraud_loss": fraud_loss,
+            "false_alarm_cost": false_alarm_cost,
+            "total_loss": total_loss,
+            "tp": int(tp.sum()),
+            "fn": int(fn.sum()),
+            "fp": int(fp.sum()),
+        }
+
+    def evaluate(self, y_true, y_pred_prob, X_features, threshold_method='static', static_threshold=0.5):
+        """
+        Evaluate a fraud detection model using a cost-based loss formulation.
+
+        This method applies a chosen decision rule (static or dynamic) to convert
+        predicted fraud probabilities into binary decisions, and then computes the
+        resulting financial losses and standard classification metrics.
+
+        Financial losses are defined as:
+        - Fraud loss: total exposure from fraud applications that were accepted.
+        - False alarm cost: total cost incurred by incorrectly flagging legitimate applications
+
+        Args:
+            y_true: true labels (0=legit, 1=fraud)
+            y_pred_prob: predicted probabilities of fraud
+            X_features: feature data containing `proposed_credit_limit` and `income`
+            threshold_method: decision rule used to produce binary predictions
+                - "static": flag if probability >= static_threshold
+                - "dynamic": flag using a cost-based threshold derived from exposure
+            static_threshold: probability threshold used when threshold_method="static"
+        """
+        if threshold_method=="static":
+            y_pred = self.predict_static(y_pred_prob, static_threshold=static_threshold)
+        else:
+            y_pred = self.predict_value_aware(
+                y_pred_prob, X_features
+            )
+
+
+        losses = self.compute_losses(
+            y_true, y_pred, X_features
+        )
+
+        return {
+            "threshold_type": f'Static ({static_threshold:.2f})'  if threshold_method == 'static' else f'Dynamic',
+            "Total_Bank_Loss_($)": float(losses["total_loss"]),
+            "Fraud_Loss_($)": float(losses["fraud_loss"]),
+            "False_Alarm_Cost_($)": float(losses["false_alarm_cost"]),
+            "Fraud_Caught_($)": float(losses["fraud_caught"]),
+            "recall": recall_score(y_true, y_pred),
+            "accuracy": accuracy_score(y_true, y_pred),
+            "f1": f1_score(y_true, y_pred),
+            "tp": losses["tp"],
+            "fn": losses["fn"],
+            "fp": losses["fp"],
         }
