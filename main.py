@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from src.load_data import normalize
-from src.models import get_base_model, get_random_forest, get_lgbm_model
+from src.models import get_base_model, get_random_forest, get_lgbm_model, get_xgboost_model
 from src.evaluation import ValueAwareEvaluator
 import matplotlib.pyplot as plt
 
@@ -19,10 +19,11 @@ CONFIG = {
 }
 
 MODEL_FACTORIES = {
-    # "Logistic Regression": get_base_model,
-    # "Random Forest": get_random_forest,
+    "Logistic Regression": get_base_model,
+    "Random Forest": get_random_forest,
     "LightGBM": get_lgbm_model,
-}
+    "XGBoost": get_xgboost_model,
+    }
 
 DECISION_RULES = [
     {"decision_rule": "Static (0.5)", "threshold_method": "static", "static_threshold": 0.5},
@@ -213,7 +214,7 @@ def plot_train_vs_val_metrics(cv_summary, metrics=['recall', 'accuracy', 'f1']):
             # Set x-axis labels
             labels = [f"{row[0]}\n{row[1]}" for row in pivot.index]
             ax.set_xticks(x)
-            ax.set_xticklabels(labels, rotation=15, ha='right', fontsize=8)
+            ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
             
             ax.set_ylabel(metric)
             ax.set_title(f'{metric.capitalize()}: Train vs Validation')
