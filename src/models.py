@@ -11,14 +11,22 @@ def get_random_forest():
     """Returns a Random Forest classifier."""
     return RandomForestClassifier(
         n_estimators=300,
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        class_weight="balanced",
+        max_depth=20,
+        min_samples_split=20,
+        min_samples_leaf=10,
+        class_weight='balanced',
         random_state=42,
         n_jobs=-1
     )
 
 def get_lgbm_model():
-    """Returns the LightGBM model."""
-    return lgb.LGBMClassifier(random_state=42, class_weight='balanced', verbose=-1)
+    """Returns the LightGBM model with regularization to prevent overfitting."""
+    return lgb.LGBMClassifier(
+        n_estimators=300,
+        max_depth=20,  
+        min_child_samples=10,
+        learning_rate=0.1,  
+        class_weight='balanced',
+        random_state=42,
+        n_jobs=-1
+    )

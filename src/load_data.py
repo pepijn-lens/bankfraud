@@ -92,18 +92,25 @@ def normalize(
 def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
     """
     Split the data into training, validation and testing sets.
-    The first 6 months are for training, the 7th month is for validation, and the 8th month is for testing.
+    The first 7 months are for training, and the 8th month is for testing.
     """
     # Split the data based on the month column
-    # The first 6 months are for training
-    X_train = df[df['month'] < 6]
-    # The 7th month is for validation
-    X_val = df[df['month'] == 6]
+    # The first 7 months are for training
+    data_train = df[df['month'] < 7]
     # The 8th month is for testing
-    X_test = df[df['month'] == 7]
+    data_test = df[df['month'] == 7]
 
-    y_train = X_train.pop('fraud_bool')
-    y_val = X_val.pop('fraud_bool')
-    y_test = X_test.pop('fraud_bool')
+    return data_train, data_test
 
-    return X_train, X_val, X_test, y_train, y_val, y_test
+
+def main():
+    df = pd.read_csv("data/2/Base.csv")
+    df = preprocess_data(df)
+    data_train, data_test = split_data(df)
+    data_train.to_csv("data/2/train.csv", index=False)
+    data_test.to_csv("data/2/test.csv", index=False)
+
+    print("Data split and saved successfully.")
+
+if __name__ == "__main__":
+    main()

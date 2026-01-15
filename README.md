@@ -7,7 +7,7 @@ We use uv to manage dependencies.
 - You add and remove dependencies with `uv add <dep>` and `uv remove <dep>`, don't add things to the pyproject.toml manually. 
 
 ## Download dataset
-To download the dataset run `python download_data.py` from the project root. 
+To download the dataset run `python download_data.py` from the project root. We split the data into training and test sets before doing our experiment. Please run `python src/load_data.py` to make this split.
 
 ## Using `src/load_data.py`
 
