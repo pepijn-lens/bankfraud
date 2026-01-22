@@ -232,3 +232,28 @@ def evaluate_model(model, X_val: pd.DataFrame, y_val: pd.Series):
     y_pred = model.predict(X_val)
     print("\nClassification Report:")
     print(classification_report(y_val, y_pred))
+
+def get_bin_edges(series: pd.Series, n_bins: int) -> list[float]:
+    """
+    Calculates bin edges for a numerical series using quantiles (qcut logic).
+    Useful for creating balanced buckets (e.g., Low, Medium, High).
+    """
+    _, bins = pd.qcut(series, q=n_bins, retbins=True, duplicates='drop')
+    # Ensure the first edge covers slightly lower values and last edge covers slightly higher
+    bins[0] = -float('inf')
+    bins[-1] = float('inf')
+    return list(bins)
+
+
+def bin_column(series: pd.Series, edges: list[float], labels: list[str] = None) -> pd.Series:
+    """
+    Converts a numerical column into a categorical one using provided bin edges.
+    """
+    if not edges:
+        return series
+
+    # Create default labels if None provided
+    if labels is None:
+        labels = range(len(edges) - 1)
+
+    return pd.cut(series, bins=edges, labels=labels, include_lowest=True)

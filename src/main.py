@@ -1,4 +1,7 @@
+import pandas as pd
+
 from constants import DATA_DIR, TARGET_COL, RESULTS_DIR
+from fairness import FairnessEvaluator
 from utils import (
     get_data,
     clean_data,
@@ -7,7 +10,7 @@ from utils import (
     pop_target,
     plot_categorical_fraud_rates,
     train_model,
-    evaluate_model, impute_features, scale_features, shuffle_data, split_data
+    evaluate_model, impute_features, scale_features, shuffle_data, split_data, get_bin_edges, bin_column
 )
 
 
@@ -47,6 +50,13 @@ def main():
     shuffled_df = shuffle_data(df, seed=42)
     train_df, val_df, test_df = split_data(shuffled_df, ratios=[0.75, 0.125])
 
+    # Save some info for fairness later
+    sensitive_cols = ["income", "customer_age"]
+    val_sensitive_raw = val_df[sensitive_cols].copy()
+    bin_edges = {}
+    for col in sensitive_cols:
+        bin_edges[col] = get_bin_edges(train_df[col], n_bins=3)
+
     # Separate Features and Target
     X_train, y_train = pop_target(train_df, TARGET_COL)
     X_val, y_val = pop_target(val_df, TARGET_COL)
@@ -75,6 +85,33 @@ def main():
     print("\n--- 8. Evaluation on Validation Set ---")
     evaluate_model(model, X_val, y_val)
 
+    # 9. Fairness Evaluation
+    print("\n--- 9. Fairness Evaluation ---")
+    val_preds = model.predict(X_val)
+
+    # Create a temporary dataframe for fairness analysis
+    fairness_df = pd.DataFrame({
+        TARGET_COL: y_val.values,
+        "prediction": val_preds
+    })
+
+    # Bin the sensitive columns using the edges derived from training data
+    labels = ["Low", "Medium", "High"]
+    for col in sensitive_cols:
+        fairness_df[col] = bin_column(
+            val_sensitive_raw[col].values,  # Use raw values we saved earlier
+            bin_edges[col],
+            labels=labels
+        )
+
+        print(f"\n>>> Fairness Analysis for: {col}")
+        evaluator = FairnessEvaluator(
+            df=fairness_df,
+            target_col=TARGET_COL,
+            pred_col="prediction",
+            sensitive_col=col
+        )
+        evaluator.summarize_disparities()
 
 if __name__ == "__main__":
     main()
