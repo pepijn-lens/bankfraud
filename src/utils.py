@@ -125,6 +125,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
 
+    # Remove corrupted (constant value) rows
     df_np = df.to_numpy()
     same_value_mask = np.all(df_np == df_np[:, [0]], axis=1)
     n_corrupted = same_value_mask.sum()
@@ -227,11 +228,13 @@ def plot_categorical_fraud_rates(df: pd.DataFrame, target_col: str, categorical_
         plt.tight_layout()
         plt.savefig(output_dir / f"fraud_rate_per_{col}.png")
 
-def evaluate_model(model, X_val: pd.DataFrame, y_val: pd.Series):
-    print("Evaluating model...")
-    y_pred = model.predict(X_val)
-    print("\nClassification Report:")
-    print(classification_report(y_val, y_pred))
+def evaluate_model(model, X, y, dataset_name: str | None=None):
+    if dataset_name is None:
+        print("Evaluating model...")
+    else:
+        print(f"Evaluating model on {dataset_name}")
+    y_pred = model.predict(X)
+    print(classification_report(y, y_pred))
 
 def get_bin_edges(series: pd.Series, n_bins: int) -> list[float]:
     """
@@ -245,15 +248,8 @@ def get_bin_edges(series: pd.Series, n_bins: int) -> list[float]:
     return list(bins)
 
 
-def bin_column(series: pd.Series, edges: list[float], labels: list[str] = None) -> pd.Series:
+def bin_column(series: pd.Series, edges: list[float], labels: list[str]) -> pd.Series:
     """
     Converts a numerical column into a categorical one using provided bin edges.
     """
-    if not edges:
-        return series
-
-    # Create default labels if None provided
-    if labels is None:
-        labels = range(len(edges) - 1)
-
     return pd.cut(series, bins=edges, labels=labels, include_lowest=True)
