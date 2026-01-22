@@ -18,7 +18,8 @@ def preprocess_data(df: pd.DataFrame, normalize: bool = True) -> pd.DataFrame:
         mask = df[column] == -1
         df.loc[mask, column] = int(median_risk_score)
 
-    df = df.drop(columns=["device_fraud_count"])
+    if "device_fraud_count" in df.columns:
+        df = df.drop(columns=["device_fraud_count"])
 
     # Convert DataFrame to numpy array for fast, vectorized operation
     df_np = df.to_numpy()
