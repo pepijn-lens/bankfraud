@@ -1,7 +1,7 @@
 import pandas as pd
 
 from constants import DATA_DIR, TARGET_COL, RESULTS_DIR
-from fairness import FairnessEvaluator
+from fairness import FairnessEvaluator, FairnessCriterion, FairnessMitigator
 from utils import (
     get_data,
     clean_data,
@@ -50,9 +50,11 @@ def main():
     shuffled_df = shuffle_data(df, seed=42)
     train_df, val_df, test_df = split_data(shuffled_df, ratios=[0.75, 0.125])
 
-    # Save some info for fairness later
+    # Save sensitive info for fairness analysis
     sensitive_cols = ["income", "customer_age"]
     val_sensitive_raw = val_df[sensitive_cols].copy()
+
+    # Create bin edges on training data to ensure consistency
     bin_edges = {}
     for col in sensitive_cols:
         bin_edges[col] = get_bin_edges(train_df[col], n_bins=3)
@@ -77,7 +79,6 @@ def main():
 
     # 7. Training
     print("\n--- 7. Training ---")
-    # Using scale_pos_weight=99 as per the notebook analysis
     model = train_model(X_train, y_train, scale_pos_weight=99.0)
     evaluate_model(model, X_train, y_train)
 
@@ -87,31 +88,56 @@ def main():
 
     # 9. Fairness Evaluation
     print("\n--- 9. Fairness Evaluation ---")
-    val_preds = model.predict(X_val)
 
-    # Create a temporary dataframe for fairness analysis
-    fairness_df = pd.DataFrame({
-        TARGET_COL: y_val.values,
-        "prediction": val_preds
+    # Get Probability predictions (needed for threshold adjustment)
+    val_probs = model.predict_proba(X_val)[:, 1]
+
+    # Prepare DataFrame for Fairness Analysis
+    # We map raw sensitive values to bins (Low, Medium, High)
+    fairness_df_base = pd.DataFrame({
+        TARGET_COL: y_val.values
     })
 
-    # Bin the sensitive columns using the edges derived from training data
     labels = ["Low", "Medium", "High"]
+
     for col in sensitive_cols:
-        fairness_df[col] = bin_column(
-            val_sensitive_raw[col].values,  # Use raw values we saved earlier
+        print(f"\n{'=' * 60}")
+        print(f"SENSITIVE ATTRIBUTE: {col}")
+        print(f"{'=' * 60}")
+
+        # Get the binned sensitive values for this column
+        sensitive_vals = bin_column(
+            val_sensitive_raw[col].values,
             bin_edges[col],
             labels=labels
         )
+        fairness_df_base["sensitive_current"] = sensitive_vals
 
-        print(f"\n>>> Fairness Analysis for: {col}")
-        evaluator = FairnessEvaluator(
-            df=fairness_df,
-            target_col=TARGET_COL,
-            pred_col="prediction",
-            sensitive_col=col
-        )
-        evaluator.summarize_disparities()
+        for criterion in FairnessCriterion:
+            print(f"\n>>> MITIGATING FOR: {criterion.upper()} <<<")
+
+            # Fit Mitigator on Validation Data
+            mitigator = FairnessMitigator(
+                y_true=y_val,
+                y_proba=val_probs,
+                sensitive_vals=sensitive_vals
+            )
+            mitigator.fit(criterion)
+
+            # Apply optimized thresholds
+            new_preds = mitigator.predict(val_probs, sensitive_vals)
+
+            eval_df = fairness_df_base.copy()
+            eval_df["prediction"] = new_preds
+
+            evaluator = FairnessEvaluator(
+                df=eval_df,
+                target_col=TARGET_COL,
+                pred_col="prediction",
+                sensitive_col="sensitive_current"
+            )
+
+            evaluator.summarize_disparities()
 
 if __name__ == "__main__":
     main()
