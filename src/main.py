@@ -24,7 +24,16 @@ def main():
     # 3. Exploratory Data Analysis (EDA)
     # We plot before encoding to keep categorical labels readable
     print("\n--- 3. EDA Plots ---")
-    plot_categorical_fraud_rates(df, output_dir=RESULTS_DIR, target_col=TARGET_COL)
+    plot_categorical_fraud_rates(
+        df,
+        output_dir=RESULTS_DIR,
+        target_col=TARGET_COL,
+        categorical_cols=[
+            *df.select_dtypes(include=['object']).columns,
+            "income",
+            "customer_age",
+        ]
+    )
 
     # 4. Encoding
     # Note: We encode before splitting for simplicity in this specific dataset (fixed categories).
@@ -60,6 +69,7 @@ def main():
     print("\n--- 7. Training ---")
     # Using scale_pos_weight=99 as per the notebook analysis
     model = train_model(X_train, y_train, scale_pos_weight=99.0)
+    evaluate_model(model, X_train, y_train)
 
     # 8. Evaluation
     print("\n--- 8. Evaluation on Validation Set ---")

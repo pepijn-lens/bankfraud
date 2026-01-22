@@ -108,6 +108,11 @@ def analyze_data(df: pd.DataFrame) -> None:
     n_corrupted = same_value_mask.sum()
     print(f"\nNumber of rows where all values are equal: {n_corrupted}")
 
+    print("\nCorrelations:")
+    if "credit_risk_score" in df.columns and "fraud_bool" in df.columns:
+        corr = df["credit_risk_score"].corr(df["fraud_bool"])
+        print(f"Pearson correlation (credit_risk_score vs fraud_bool): {corr:.4f}")
+
 def one_distinct_value(xs: pd.Series) -> bool:
     """Returns True if the series only contains a single distinct value.
 
@@ -187,13 +192,12 @@ def train_model(X_train: pd.DataFrame, y_train: pd.Series, scale_pos_weight: flo
     model.fit(X_train, y_train)
     return model
 
-def plot_categorical_fraud_rates(df: pd.DataFrame, target_col: str, output_dir: Path):
+def plot_categorical_fraud_rates(df: pd.DataFrame, target_col: str, categorical_cols: list[str], output_dir: Path):
     """
     Plots the mean fraud rate for categorical features.
     """
     print("Plotting categorical fraud rates...")
     mean_fraud_rate = df[target_col].mean()
-    categorical_cols = df.select_dtypes(include=['object']).columns
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
