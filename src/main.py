@@ -120,4 +120,7 @@ def main():
             summarize_disparities(eval_df_mitigated, TARGET_COL, "prediction", col)
 
 if __name__ == "__main__":
-    main()
+    # Run main experiment
+    run_experiment()
+    
+
