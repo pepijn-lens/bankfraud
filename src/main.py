@@ -143,32 +143,4 @@ if __name__ == "__main__":
     # Run main experiment
     run_experiment()
     
-    # Run age fairness analysis (RQ5)
-    print("\n" + "="*60)
-    print("RQ5: Age Fairness Analysis")
-    print("="*60)
-    
-    df = pd.read_csv(CONFIG["data_path"])
-    df = preprocess_data(df)
-    
-    # With age included
-    print("\n--- Analysis WITH age as feature ---")
-    results_with_age = run_age_fairness_analysis(
-        df=df,
-        label_col="fraud_bool",
-        exclude_age_from_features=False,
-        n_splits=CONFIG["n_splits"],
-        seed=CONFIG["seed"]
-    )
-    print_age_fairness_summary(results_with_age)
-    
-    # Ablation: without age
-    print("\n--- Ablation: WITHOUT age as feature ---")
-    results_without_age = run_age_fairness_analysis(
-        df=df,
-        label_col="fraud_bool",
-        exclude_age_from_features=True,
-        n_splits=CONFIG["n_splits"],
-        seed=CONFIG["seed"]
-    )
-    print_age_fairness_summary(results_without_age)
+
