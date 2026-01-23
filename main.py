@@ -4,11 +4,15 @@ from typing import Dict
 from sklearn.model_selection import StratifiedKFold
 
 from src.binning import BinningStrat, BinningTransformer
-from src.constants import DATA_DIR
-from src.load_data import preprocess_global, preprocess_fold
-from src.models import get_base_model, get_random_forest
+from src.constants import DATA_DIR, TARGET_COL
+from src.load_data import preprocess_global, preprocess_fold, prepare_data
+from src.models import get_base_model, get_random_forest, get_xgb_model
 from src.evaluation import ValueAwareEvaluator
+from src.training import train_and_save_classifiers, evaluate_on_test_set, train_logistic_regression
 import matplotlib.pyplot as plt
+import pickle
+from pathlib import Path
+import os
 
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
@@ -24,6 +28,7 @@ CONFIG = {
 MODEL_FACTORIES = {
     "Logistic Regression": get_base_model,
     "Random Forest": get_random_forest,
+    "XGBoost": get_xgb_model,
 }
 
 DECISION_RULES = [
@@ -131,7 +136,6 @@ def plot_total_loss_by_model_and_rule(cv_summary):
     plt.legend()
     plt.tight_layout()
     plt.show()
-
 
 def run_experiment():
     print("1. Loading and Preprocessing Data...")
@@ -384,50 +388,60 @@ def print_age_fairness_summary(results: Dict):
                 print(disparities.round(4))
 
 if __name__ == "__main__":
-    # Run main experiment
+    # # Run old experiment with underfitted classifiers
     # run_experiment()
-    
-    # Run age fairness analysis (RQ5)
-    print("\n" + "="*60)
-    print("RQ5: Age Fairness Analysis")
-    print("="*60)
-    
-    df = pd.read_csv(CONFIG["data_path"])
-    df = preprocess_global(df)
-    
-    # With age included
-    print("\n--- Analysis WITH age as feature ---")
-    results_with_age = run_age_fairness_analysis(
-        df=df,
-        label_col="fraud_bool",
-        exclude_age_from_features=False,
-        n_splits=CONFIG["n_splits"],
-        seed=CONFIG["seed"]
-    )
-    print_age_fairness_summary(results_with_age)
-    
-    # Ablation: without age
-    print("\n--- Ablation: WITHOUT age as feature ---")
-    results_without_age = run_age_fairness_analysis(
-        df=df,
-        label_col="fraud_bool",
-        exclude_age_from_features=True,
-        n_splits=CONFIG["n_splits"],
-        seed=CONFIG["seed"]
-    )
-    print_age_fairness_summary(results_without_age)
 
-    # Run income fairness analysis
-    print("\n" + "=" * 60)
-    print("Income Fairness Analysis")
-    print("=" * 60)
+    # Models are already saved in the models/ directory and will be automatically
+    # loaded by evaluate_on_test_set() below.
+    #
+    # Only uncomment the line below if you need to retrain models with different
+    # hyperparameters or if models are missing.
+    # fitted_models, X_test, y_test = train_and_save_classifiers()
+    
+    # Evaluate on test set (automatically loads existing models from models/ directory)
+    evaluate_on_test_set()
+    
+    # # Run age fairness analysis (RQ5)
+    # print("\n" + "="*60)
+    # print("RQ5: Age Fairness Analysis")
+    # print("="*60)
+    
+    # df = pd.read_csv(CONFIG["data_path"])
+    # df = preprocess_global(df)
+    
+    # # With age included
+    # print("\n--- Analysis WITH age as feature ---")
+    # results_with_age = run_age_fairness_analysis(
+    #     df=df,
+    #     label_col="fraud_bool",
+    #     exclude_age_from_features=False,
+    #     n_splits=CONFIG["n_splits"],
+    #     seed=CONFIG["seed"]
+    # )
+    # print_age_fairness_summary(results_with_age)
+    
+    # # Ablation: without age
+    # print("\n--- Ablation: WITHOUT age as feature ---")
+    # results_without_age = run_age_fairness_analysis(
+    #     df=df,
+    #     label_col="fraud_bool",
+    #     exclude_age_from_features=True,
+    #     n_splits=CONFIG["n_splits"],
+    #     seed=CONFIG["seed"]
+    # )
+    # print_age_fairness_summary(results_without_age)
 
-    results_income = run_income_fairness_analysis(
-        df=df,
-        label_col="fraud_bool",
-        income_col="income",  # Ensure this matches your dataset column name
-        n_splits=CONFIG["n_splits"],
-        seed=CONFIG["seed"]
-    )
-    # Re-using the summary printer as the structure is identical
-    print_age_fairness_summary(results_income)
+    # # Run income fairness analysis
+    # print("\n" + "=" * 60)
+    # print("Income Fairness Analysis")
+    # print("=" * 60)
+
+    # results_income = run_income_fairness_analysis(
+    #     df=df,
+    #     label_col="fraud_bool",
+    #     income_col="income",  # Ensure this matches your dataset column name
+    #     n_splits=CONFIG["n_splits"],
+    #     seed=CONFIG["seed"]
+    # )
+    # # Re-using the summary printer as the structure is identical
+    # print_age_fairness_summary(results_income)
