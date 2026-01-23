@@ -2,18 +2,18 @@ import pandas as pd
 import numpy as np
 from typing import Dict
 from sklearn.model_selection import StratifiedKFold
-from src.load_data import preprocess_data, normalize
+from constants import DATA_DIR
+from src.load_data import preprocess_global, preprocess_fold
 from src.models import get_base_model, get_random_forest
 from src.evaluation import ValueAwareEvaluator
 import matplotlib.pyplot as plt
-
 
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
 CONFIG = {
-    "data_path": "data/2/Base.csv",
+    "data_path": DATA_DIR / "2" / "Base.csv",
     "naive_threshold": 0.5,
     "n_splits": 5,
     "seed": 42,
@@ -55,8 +55,7 @@ def run_cross_validation(df, label_col, n_splits=5, seed=42):
         y_train = y[train_idx]
         X_test = X.iloc[test_idx]
         y_test = y[test_idx]
-
-        X_train_scaled, X_test_scaled, _, *_ = normalize(X_train, X_test, X_test)
+        X_train_scaled, X_test_scaled, _ = preprocess_fold(X_train, X_test, X_test)
 
         for model_name, factory in MODEL_FACTORIES.items():
             print("Model", model_name)
@@ -135,7 +134,7 @@ def plot_total_loss_by_model_and_rule(cv_summary):
 def run_experiment():
     print("1. Loading and Preprocessing Data...")
     df = pd.read_csv(CONFIG["data_path"])
-    df = preprocess_data(df)
+    df = preprocess_global(df)
 
     cv_results, cv_summary = run_cross_validation(
         df=df,
@@ -207,7 +206,7 @@ def run_age_fairness_analysis(
         y_test = y[test_idx]
         
         # Normalize BEFORE adding age back
-        X_train_scaled, X_test_scaled, _, *_ = normalize(X_train, X_test, X_test)
+        X_train_scaled, X_test_scaled, _ = preprocess_fold(X_train, X_test, X_test)
         
         # Now add age back to X_test for grouping (but NOT to X_test_scaled)
         if exclude_age_from_features and age_data is not None:
@@ -300,7 +299,7 @@ if __name__ == "__main__":
     print("="*60)
     
     df = pd.read_csv(CONFIG["data_path"])
-    df = preprocess_data(df)
+    df = preprocess_global(df)
     
     # With age included
     print("\n--- Analysis WITH age as feature ---")
