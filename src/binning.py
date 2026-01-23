@@ -92,4 +92,9 @@ class BinningTransformer:
                 label = f"{low}-{high}"
             generated_labels.append(label)
 
+        # Check for duplicates
+        if len(set(generated_labels)) < len(generated_labels):
+            # If duplicates, fallback to default interval string representation
+            return [str(cat) for cat in categories]
+
         return generated_labels
