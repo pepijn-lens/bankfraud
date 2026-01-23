@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict
 from sklearn.model_selection import StratifiedKFold
+
+from binning import BinningStrat, BinningTransformer
 from constants import DATA_DIR
 from src.load_data import preprocess_global, preprocess_fold
 from src.models import get_base_model, get_random_forest
@@ -170,7 +172,7 @@ def run_age_fairness_analysis(
     - Loss per age group (FN loss and FP cost)
     - Statistical significance via bootstrap CIs
     """
-    from src.age_fairness import AgeFairnessAnalyzer
+    from src.age_fairness import GroupFairnessAnalyzer
     from sklearn.model_selection import StratifiedKFold
     
     X = df.drop(columns=[label_col])
@@ -185,10 +187,18 @@ def run_age_fairness_analysis(
             print(f"Ablation: Training without '{age_col}' feature")
     
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-    analyzer = AgeFairnessAnalyzer(
-        age_col=age_col, 
-        n_bins=n_bins, 
-        binning_method=binning_method,
+
+    if binning_method == "quantile":
+        strat = BinningStrat.QUANTILE
+    elif binning_method == "uniform":
+        strat = BinningStrat.UNIFORM
+    else:
+        raise ValueError(f"Unexpected binning_method: {binning_method}")
+    binner = BinningTransformer(n_bins=n_bins, strategy=strat)
+
+    analyzer = GroupFairnessAnalyzer(
+        group_col=age_col,
+        binning_transformer=binner,
         random_state=seed
     )
     evaluator = ValueAwareEvaluator()
@@ -225,7 +235,6 @@ def run_age_fairness_analysis(
             y_pred=y_pred_static,
             y_pred_prob=p_test,
             X_test=X_test,
-            age_col=age_col
         )
         metrics_static["fold"] = fold
         metrics_static["decision_rule"] = "Static (0.5)"
@@ -238,7 +247,6 @@ def run_age_fairness_analysis(
             y_pred=y_pred_value_aware,
             y_pred_prob=p_test,
             X_test=X_test,
-            age_col=age_col
         )
         metrics_va["fold"] = fold
         metrics_va["decision_rule"] = "Value-Aware"
@@ -280,18 +288,16 @@ def print_age_fairness_summary(results: Dict):
         
         # Compute disparities if multiple groups
         if len(mean_metrics) > 1:
-            from src.age_fairness import AgeFairnessAnalyzer
-            analyzer = AgeFairnessAnalyzer()
-            # Create a combined dataframe for disparity computation
+            from src.age_fairness import compute_disparity_metrics
             combined = mean_metrics.reset_index()
-            disparities = analyzer.compute_disparity_metrics(combined)
+            disparities = compute_disparity_metrics(combined)
             if not disparities.empty:
                 print("\nDisparity Metrics (relative to largest group):")
                 print(disparities.round(4))
 
 if __name__ == "__main__":
     # Run main experiment
-    run_experiment()
+    # run_experiment()
     
     # Run age fairness analysis (RQ5)
     print("\n" + "="*60)

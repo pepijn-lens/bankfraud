@@ -5,112 +5,101 @@ from sklearn.metrics import confusion_matrix
 from scipy import stats
 import warnings
 
+from binning import BinningTransformer
 
-class AgeFairnessAnalyzer:
+
+def compute_disparity_metrics(
+    group_metrics: pd.DataFrame,
+    reference_group: Optional[str] = None
+) -> pd.DataFrame:
     """
-    Analyzer for evaluating fairness across age groups (RQ5).
-    
+    Compute disparity measures relative to a reference group.
+
+    If reference_group is None, uses the group with largest n as reference.
+
+    """
+    if len(group_metrics) == 0:
+        return pd.DataFrame()
+
+    if reference_group is None:
+        reference_group = group_metrics.loc[group_metrics["n"].idxmax(), "group"]
+
+    ref_metrics = group_metrics[group_metrics["group"] == reference_group]
+    if len(ref_metrics) == 0:
+        warnings.warn(f"Reference group '{reference_group}' not found. Using first group.")
+        reference_group = group_metrics.iloc[0]["group"]
+        ref_metrics = group_metrics[group_metrics["group"] == reference_group]
+
+    ref_metrics = ref_metrics.iloc[0]
+
+    disparities = []
+    for _, row in group_metrics.iterrows():
+        if row["group"] == reference_group:
+            continue
+
+        disparities.append({
+            "group": row["group"],
+            "reference_group": reference_group,
+            "flag_rate_ratio": row["flag_rate"] / ref_metrics["flag_rate"] if ref_metrics["flag_rate"] > 0 else np.nan,
+            "flag_rate_diff": row["flag_rate"] - ref_metrics["flag_rate"],
+            "tpr_ratio": row["tpr"] / ref_metrics["tpr"] if ref_metrics["tpr"] > 0 else np.nan,
+            "tpr_diff": row["tpr"] - ref_metrics["tpr"],
+            "fpr_ratio": row["fpr"] / ref_metrics["fpr"] if ref_metrics["fpr"] > 0 else np.nan,
+            "fpr_diff": row["fpr"] - ref_metrics["fpr"],
+            "total_loss_ratio": row["total_loss"] / ref_metrics["total_loss"] if ref_metrics["total_loss"] > 0 else np.nan,
+            "total_loss_diff": row["total_loss"] - ref_metrics["total_loss"],
+        })
+
+    return pd.DataFrame(disparities)
+
+
+class GroupFairnessAnalyzer:
+    """
+    Analyzer for evaluating fairness across groups (e.g., Age, Gender).
+
     Evaluates:
-    - Flag rate (selection rate) per age group
-    - TPR/FPR per age group (equal opportunity/equalized odds)
-    - Loss per age group (FN loss and FP cost)
+    - Flag rate (selection rate) per group
+    - TPR/FPR per group (equal opportunity/equalized odds)
+    - Loss per group (FN loss and FP cost)
     - Statistical significance via bootstrap CIs or paired tests
     """
-    
+
     def __init__(
         self,
-        age_col: str = "customer_age",
-        n_bins: int = 4,
-        binning_method: str = "quantile",
-        predefined_bins: Optional[List[float]] = None,
+        group_col: str,
+        binning_transformer: Optional[BinningTransformer] = None,
         random_state: int = 42
     ):
         """
         Args:
-            age_col: Name of the age column
-            n_bins: Number of age bins (if using quantile or uniform binning)
-            binning_method: "quantile", "uniform", or "predefined"
-            predefined_bins: List of bin edges for predefined binning (e.g., [18, 30, 45, 60, 100])
-            random_state: Random seed for bootstrap
+            group_col: Name of the column to group by (e.g., "customer_age").
+            binning_transformer: Instance of BinningTransformer.
+                                 If None, assumes group_col is already categorical.
+                                 If provided, it will be used to discretize the group_col.
+            random_state: Random seed for bootstrap.
         """
-        self.age_col = age_col
-        self.n_bins = n_bins
-        self.binning_method = binning_method
-        self.predefined_bins = predefined_bins
+        self.group_col = group_col
+        self.binning_transformer = binning_transformer
         self.random_state = random_state
-        self.bin_edges_ = None
-        self.bin_labels_ = None
-        
-    def create_age_bins(
-        self,
-        ages: pd.Series,
-        return_labels: bool = True
-    ) -> Tuple[pd.Series, Optional[List[str]]]:
+
+    def _get_group_labels(self, X: pd.DataFrame) -> pd.Series:
         """
-        Discretize age into K bins to ensure stable estimation of group-conditional rates.
-        
-        Args:
-            ages: Series of age values
-            return_labels: Whether to return readable bin labels
-            
+        Extracts and optionally bins the grouping column from the data.
         """
-        ages = pd.Series(ages)
-        
-        if self.binning_method == "predefined":
-            if self.predefined_bins is None:
-                raise ValueError("predefined_bins must be provided for predefined binning")
-            self.bin_edges_ = self.predefined_bins
-            age_bins = pd.cut(
-                ages, 
-                bins=self.bin_edges_, 
-                include_lowest=True, 
-                duplicates='drop'
-            )
-        elif self.binning_method == "quantile":
-            age_bins, self.bin_edges_ = pd.qcut(
-                ages, 
-                q=self.n_bins, 
-                retbins=True, 
-                duplicates='drop'
-            )
-        elif self.binning_method == "uniform":
-            age_bins, self.bin_edges_ = pd.cut(
-                ages, 
-                bins=self.n_bins, 
-                retbins=True, 
-                include_lowest=True, 
-                duplicates='drop'
-            )
-        else:
-            raise ValueError(f"Unknown binning_method: {self.binning_method}. Must be 'quantile', 'uniform', or 'predefined'")
-        
-        if return_labels:
-            # Create readable labels
-            self.bin_labels_ = []
-            for i in range(len(self.bin_edges_) - 1):
-                low = int(self.bin_edges_[i])
-                high = int(self.bin_edges_[i + 1])
-                if i == len(self.bin_edges_) - 2:
-                    # Last bin: include upper bound
-                    self.bin_labels_.append(f"{low}-{high}")
-                else:
-                    self.bin_labels_.append(f"{low}-{high-1}")
-            
-            # Map intervals to labels
-            label_map = {
-                interval: label 
-                for interval, label in zip(age_bins.cat.categories, self.bin_labels_)
-            }
-            age_bins = age_bins.map(label_map)
-        
-        return age_bins, self.bin_labels_
-    
+        if self.group_col not in X.columns:
+            raise ValueError(f"Group column '{self.group_col}' not found.")
+
+        raw_values = X[self.group_col]
+        if self.binning_transformer is None:
+            return raw_values.astype(str)
+        return self.binning_transformer.fit_transform(raw_values)
+
     def compute_group_metrics(
         self,
         y_true: np.ndarray,
         y_pred: np.ndarray,
         y_pred_prob: Optional[np.ndarray] = None,
-        age_groups: Optional[pd.Series] = None,
+        groups: Optional[pd.Series] = None,
         X_features: Optional[pd.DataFrame] = None,
         credit_col: str = "proposed_credit_limit",
         ops_cost: float = 100.0,
@@ -131,7 +120,7 @@ class AgeFairnessAnalyzer:
             y_true: True labels (0=legit, 1=fraud)
             y_pred: Binary predictions
             y_pred_prob: Predicted probabilities (optional, for future use)
-            age_groups: Series with age group assignments
+            groups: Series with age group assignments
             X_features: Feature dataframe containing credit limit
             credit_col: Name of credit limit column
             ops_cost: Operational cost per false positive
@@ -141,14 +130,14 @@ class AgeFairnessAnalyzer:
         y_true = np.asarray(y_true)
         y_pred = np.asarray(y_pred)
         
-        if age_groups is None:
+        if groups is None:
             # If no groups provided, compute overall metrics
-            age_groups = pd.Series(["Overall"] * len(y_true))
+            groups = pd.Series(["Overall"] * len(y_true))
         
         results = []
         
-        for group in age_groups.unique():
-            mask = age_groups == group
+        for group in groups.unique():
+            mask = groups == group
             y_true_group = y_true[mask]
             y_pred_group = y_pred[mask]
             
@@ -189,8 +178,8 @@ class AgeFairnessAnalyzer:
             total_loss = 0.0
             
             if X_features is not None:
-                if hasattr(X_features, 'iloc'):
-                    X_group = X_features.iloc[mask]
+                if hasattr(X_features, 'loc'):
+                    X_group = X_features.loc[mask]
                 else:
                     X_group = X_features[mask]
                 
@@ -210,7 +199,7 @@ class AgeFairnessAnalyzer:
                     total_loss = fn_loss + fp_cost
             
             results.append({
-                "age_group": group,
+                "group": group,
                 "n": len(y_true_group),
                 "n_fraud": int(y_true_group.sum()),
                 "fraud_rate": float(y_true_group.mean()),
@@ -227,52 +216,7 @@ class AgeFairnessAnalyzer:
             })
         
         return pd.DataFrame(results)
-    
-    def compute_disparity_metrics(
-        self,
-        group_metrics: pd.DataFrame,
-        reference_group: Optional[str] = None
-    ) -> pd.DataFrame:
-        """
-        Compute disparity measures relative to a reference group.
-        
-        If reference_group is None, uses the group with largest n as reference.
-            
-        """
-        if len(group_metrics) == 0:
-            return pd.DataFrame()
-        
-        if reference_group is None:
-            reference_group = group_metrics.loc[group_metrics["n"].idxmax(), "age_group"]
-        
-        ref_metrics = group_metrics[group_metrics["age_group"] == reference_group]
-        if len(ref_metrics) == 0:
-            warnings.warn(f"Reference group '{reference_group}' not found. Using first group.")
-            reference_group = group_metrics.iloc[0]["age_group"]
-            ref_metrics = group_metrics[group_metrics["age_group"] == reference_group]
-        
-        ref_metrics = ref_metrics.iloc[0]
-        
-        disparities = []
-        for _, row in group_metrics.iterrows():
-            if row["age_group"] == reference_group:
-                continue
-            
-            disparities.append({
-                "age_group": row["age_group"],
-                "reference_group": reference_group,
-                "flag_rate_ratio": row["flag_rate"] / ref_metrics["flag_rate"] if ref_metrics["flag_rate"] > 0 else np.nan,
-                "flag_rate_diff": row["flag_rate"] - ref_metrics["flag_rate"],
-                "tpr_ratio": row["tpr"] / ref_metrics["tpr"] if ref_metrics["tpr"] > 0 else np.nan,
-                "tpr_diff": row["tpr"] - ref_metrics["tpr"],
-                "fpr_ratio": row["fpr"] / ref_metrics["fpr"] if ref_metrics["fpr"] > 0 else np.nan,
-                "fpr_diff": row["fpr"] - ref_metrics["fpr"],
-                "total_loss_ratio": row["total_loss"] / ref_metrics["total_loss"] if ref_metrics["total_loss"] > 0 else np.nan,
-                "total_loss_diff": row["total_loss"] - ref_metrics["total_loss"],
-            })
-        
-        return pd.DataFrame(disparities)
-    
+
     def bootstrap_ci(
         self,
         data: np.ndarray,
@@ -321,7 +265,6 @@ class AgeFairnessAnalyzer:
         y_pred: np.ndarray,
         y_pred_prob: Optional[np.ndarray] = None,
         X_test: pd.DataFrame = None,
-        age_col: str = "customer_age"
     ) -> pd.DataFrame:
         """
         Evaluate a single CV fold and return group-level metrics.
@@ -331,23 +274,17 @@ class AgeFairnessAnalyzer:
             y_pred: Binary predictions
             y_pred_prob: Predicted probabilities (optional)
             X_test: Test feature dataframe
-            age_col: Name of age column
-            
         """
         if X_test is None:
             raise ValueError("X_test must be provided")
-        
-        if age_col not in X_test.columns:
-            raise ValueError(f"Age column '{age_col}' not found in X_test. Available columns: {list(X_test.columns)}")
-        
-        ages = X_test[age_col]
-        age_groups, _ = self.create_age_bins(ages, return_labels=True)
-        
+
+        groups = self._get_group_labels(X_test)
+
         metrics = self.compute_group_metrics(
             y_true=y_true,
             y_pred=y_pred,
             y_pred_prob=y_pred_prob,
-            age_groups=age_groups,
+            groups=groups,
             X_features=X_test
         )
         
@@ -379,13 +316,13 @@ class AgeFairnessAnalyzer:
         # Concatenate all fold results
         all_results = pd.concat(cv_results, ignore_index=True)
         
-        # Group by age_group and compute mean/std
+        # Group by group and compute mean/std
         numeric_cols = all_results.select_dtypes(include=[np.number]).columns.tolist()
-        if "age_group" in numeric_cols:
-            numeric_cols.remove("age_group")
+        if "group" in numeric_cols:
+            numeric_cols.remove("group")
         
-        mean_metrics = all_results.groupby("age_group")[numeric_cols].mean()
-        std_metrics = all_results.groupby("age_group")[numeric_cols].std()
+        mean_metrics = all_results.groupby("group")[numeric_cols].mean()
+        std_metrics = all_results.groupby("group")[numeric_cols].std()
         
         result_dict = {
             "mean_metrics": mean_metrics,
@@ -395,8 +332,8 @@ class AgeFairnessAnalyzer:
         if compute_cis:
             # Compute bootstrap CIs for each metric and group
             ci_data = {}
-            for group in all_results["age_group"].unique():
-                group_data = all_results[all_results["age_group"] == group]
+            for group in all_results["group"].unique():
+                group_data = all_results[all_results["group"] == group]
                 ci_data[group] = {}
                 
                 for metric in ["flag_rate", "tpr", "fpr", "total_loss", "fn_loss", "fp_cost"]:
@@ -430,7 +367,6 @@ class AgeFairnessAnalyzer:
         Perform paired statistical test across CV folds for a given metric.
         
         Compares metrics between two groups (e.g., two age groups) across folds.
-        
         """
         if len(cv_results_group1) != len(cv_results_group2):
             raise ValueError("Both groups must have same number of CV folds")
