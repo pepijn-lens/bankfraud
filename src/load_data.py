@@ -1,11 +1,14 @@
 import shutil
 from pathlib import Path
-
+import matplotlib.pyplot as plt
+import seaborn as sns
 import kagglehub
 import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
+
+from src.constants import RESULTS_DIR
 
 def download_data(output_dir: Path):
     # Download latest version
@@ -104,3 +107,47 @@ def preprocess_fold(
         X_test_proc[continuous_cols] = scaler.transform(X_test_proc[continuous_cols])
 
     return X_train_proc, X_val_proc, X_test_proc
+
+def plot_graphs(df: pd.DataFrame) -> None:
+    # Numeric features to plot (exclude target)
+    numeric_features = [
+        c for c in df.select_dtypes(include=[np.number]).columns
+        if df[c].nunique() >= 10
+    ]
+    n_features = len(numeric_features)
+    ncols = 3
+    nrows = (n_features + ncols - 1) // ncols
+
+    # KDE plots
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 4 * nrows))
+    fig.suptitle('Distribution of Numeric Features by Fraud Status')
+    if nrows == 1:
+        axes = axes.reshape(1, -1)
+    for i, feature in enumerate(numeric_features):
+        ax = axes[i // ncols, i % ncols]
+        sns.kdeplot(data=df[df['fraud_bool'] == 0][feature], fill=True, ax=ax, label='Not Fraud', warn_singular=False)
+        sns.kdeplot(data=df[df['fraud_bool'] == 1][feature], fill=True, ax=ax, label='Fraud', warn_singular=False)
+        ax.set_xlabel(feature)
+        ax.legend()
+    for j in range(n_features, nrows * ncols):
+        axes.flat[j].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "distribution_of_numeric_features.png")
+
+    # Box plots
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 4 * nrows))
+    fig.suptitle('Box Plot of Numeric Features by Fraud Status')
+    if nrows == 1:
+        axes = axes.reshape(1, -1)
+    for i, feature in enumerate(numeric_features):
+        ax = axes[i // ncols, i % ncols]
+        sns.boxplot(data=df, x='fraud_bool', y=feature, ax=ax, boxprops=dict(alpha=.6))
+        ax.set_xlabel('')
+        ax.set_ylabel(feature)
+        ax.set_xticklabels(['Not Fraud', 'Fraud'])
+    for j in range(n_features, nrows * ncols):
+        axes.flat[j].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "boxplots_of_numeric_features.png")
