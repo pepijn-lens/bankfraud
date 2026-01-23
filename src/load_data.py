@@ -108,64 +108,6 @@ def preprocess_fold(
 
     return X_train_proc, X_val_proc, X_test_proc
 
-def prepare_data(
-    data_path: Path | None = None,
-    train_month_max: int = 5,
-    val_month: int = 6,
-    test_month: int = 7,
-    save_test_path: Path | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Load data, preprocess globally, and split chronologically by month.
-    
-    Args:
-        data_path: Path to data file. If None, uses _get_data_path() logic.
-        train_month_max: Maximum month for training (inclusive, so month <= train_month_max).
-                         Default 5 means train on months <= 5.
-        val_month: Month to use for validation. Default 6.
-        test_month: Month to use for test. Default 7.
-        save_test_path: If provided, save test set to this path. If None, saves to DATA_DIR / "test.csv".
-    
-    Returns:
-        (df_train, df_val, df_test): DataFrames after preprocess_global, split by month.
-                                     Month column is still present in returned DataFrames.
-    """
-    from src.constants import DATA_DIR
-    
-    # Resolve data path
-    if data_path is None:
-        p = DATA_DIR / "2" / "Base.csv"
-        if p.exists():
-            data_path = p
-        else:
-            data_path = DATA_DIR / "Base.csv"
-    
-    if data_path.exists():
-        df = pd.read_csv(data_path)
-    else:
-        df = get_data(DATA_DIR)
-    
-    # Preprocess globally
-    df = preprocess_global(df)
-    
-    # Chronological split
-    df_train = df[df['month'] <= train_month_max].copy()
-    df_val = df[df['month'] == val_month].copy()
-    df_test = df[df['month'] == test_month].copy()
-    
-    # Save test set if requested
-    if save_test_path is None:
-        save_test_path = DATA_DIR / "test.csv"
-    if save_test_path and len(df_test) > 0:
-        df_test.to_csv(save_test_path, index=False)
-        print(f"Saved test set (month {test_month}) to {save_test_path}")
-    
-    print(f"Train: {len(df_train)} samples (month <= {train_month_max})")
-    print(f"Val: {len(df_val)} samples (month == {val_month})")
-    print(f"Test: {len(df_test)} samples (month == {test_month})")
-    
-    return df_train, df_val, df_test
-
 
 def plot_graphs(df: pd.DataFrame) -> None:
     # Numeric features to plot (exclude target)
