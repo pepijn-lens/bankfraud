@@ -5,7 +5,7 @@ from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SRC_DIR.parent
-DATA_DIR = PROJECT_DIR / "data"
+DATA_DIR = PROJECT_DIR / "data/2"
 RESULTS_DIR = PROJECT_DIR / "results"
 
 TARGET_COL = "fraud_bool"

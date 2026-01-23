@@ -3,8 +3,8 @@ import numpy as np
 from typing import Dict
 from sklearn.model_selection import StratifiedKFold
 
-from binning import BinningStrat, BinningTransformer
-from constants import DATA_DIR
+from src.binning import BinningStrat, BinningTransformer
+from src.constants import DATA_DIR
 from src.load_data import preprocess_global, preprocess_fold
 from src.models import get_base_model, get_random_forest
 from src.evaluation import ValueAwareEvaluator

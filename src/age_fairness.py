@@ -5,7 +5,7 @@ from sklearn.metrics import confusion_matrix
 from scipy import stats
 import warnings
 
-from binning import BinningTransformer
+from src.binning import BinningTransformer
 
 
 def compute_disparity_metrics(
