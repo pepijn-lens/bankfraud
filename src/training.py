@@ -18,7 +18,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 
-from src.constants import TARGET_COL, DATA_DIR
+from src.constants import TARGET_COL, DATA_DIR, RESULTS_DIR
 from src.load_data import get_data, preprocess_global
 from src.evaluation import MLMetricsEvaluator, ValueAwareEvaluator
 
@@ -491,5 +491,16 @@ def evaluate_on_test_set(
             print(f"  Recall: {results_dynamic['recall']:.4f}")
             print(f"  Accuracy: {results_dynamic['accuracy']:.4f}")
             print(f"  F1: {results_dynamic['f1']:.4f}")
+            
+            # Threshold sweep visualization
+            print(f"\n--- Threshold Sweep Analysis for {name} ---")
+            sweep_path = RESULTS_DIR / f"{name}_threshold_sweep.png"
+            sweep_df, optimal_thresh = value_evaluator.plot_threshold_sweep(
+                y_true=y_test,
+                y_pred_prob=y_prob,
+                X_features=X_test,
+                n_thresholds=200,
+                save_path=sweep_path,
+            )
     else:
         print("\nWarning: 'proposed_credit_limit' not found in test set. Skipping Value-Aware evaluation.")

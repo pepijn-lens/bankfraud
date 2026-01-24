@@ -379,3 +379,128 @@ class ValueAwareEvaluator:
             "fn": losses["fn"],
             "fp": losses["fp"],
         }
+
+    def sweep_thresholds(
+        self,
+        y_true,
+        y_pred_prob,
+        X_features,
+        threshold_range=None,
+        n_thresholds=200,
+    ):
+        """
+        Sweep through multiple thresholds to find the one that minimizes total bank loss.
+        
+        Args:
+            y_true: True labels (0=legit, 1=fraud)
+            y_pred_prob: Predicted probabilities of fraud
+            X_features: Feature data containing proposed_credit_limit
+            threshold_range: Tuple (min, max) for threshold range. If None, uses (0, 1).
+            n_thresholds: Number of thresholds to test (default 200)
+        
+        Returns:
+            DataFrame with columns: threshold, Total_Bank_Loss_($), Fraud_Loss_($),
+            False_Alarm_Cost_($), recall, accuracy, f1
+        """
+        if threshold_range is None:
+            threshold_range = (0.0, 1.0)
+        
+        thresholds = np.linspace(threshold_range[0], threshold_range[1], n_thresholds)
+        results = []
+        
+        for thresh in thresholds:
+            res = self.evaluate(
+                y_true=y_true,
+                y_pred_prob=y_pred_prob,
+                X_features=X_features,
+                threshold_method="static",
+                static_threshold=thresh,
+            )
+            results.append({
+                "threshold": thresh,
+                "Total_Bank_Loss_($)": res["Total_Bank_Loss_($)"],
+                "Fraud_Loss_($)": res["Fraud_Loss_($)"],
+                "False_Alarm_Cost_($)": res["False_Alarm_Cost_($)"],
+                "Fraud_Caught_($)": res["Fraud_Caught_($)"],
+                "recall": res["recall"],
+                "accuracy": res["accuracy"],
+                "f1": res["f1"],
+                "tp": res["tp"],
+                "fn": res["fn"],
+                "fp": res["fp"],
+            })
+        
+        df = pd.DataFrame(results)
+        return df
+
+    def plot_threshold_sweep(
+        self,
+        y_true,
+        y_pred_prob,
+        X_features,
+        threshold_range=None,
+        n_thresholds=200,
+        save_path=None,
+    ):
+        """
+        Plot total bank loss vs threshold to visualize the optimal threshold.
+        
+        Args:
+            y_true: True labels (0=legit, 1=fraud)
+            y_pred_prob: Predicted probabilities of fraud
+            X_features: Feature data containing proposed_credit_limit
+            threshold_range: Tuple (min, max) for threshold range. If None, uses (0, 1).
+            n_thresholds: Number of thresholds to test (default 200)
+            save_path: Optional path to save the plot
+        """
+        df = self.sweep_thresholds(
+            y_true, y_pred_prob, X_features, threshold_range, n_thresholds
+        )
+        
+        # Find optimal threshold
+        optimal_idx = df["Total_Bank_Loss_($)"].idxmin()
+        optimal_thresh = df.loc[optimal_idx, "threshold"]
+        optimal_loss = df.loc[optimal_idx, "Total_Bank_Loss_($)"]
+        
+        fig, axes = plt.subplots(2, 1, figsize=(10, 10))
+        
+        # Plot 1: Total Bank Loss
+        axes[0].plot(df["threshold"], df["Total_Bank_Loss_($)"], linewidth=2, label="Total Bank Loss")
+        axes[0].axvline(optimal_thresh, color='r', linestyle='--', linewidth=2, 
+                       label=f'Optimal @ {optimal_thresh:.4f} (${optimal_loss:,.2f})')
+        axes[0].axvline(0.5, color='g', linestyle='--', linewidth=1, alpha=0.7, label='Default @ 0.5')
+        axes[0].set_xlabel('Threshold')
+        axes[0].set_ylabel('Total Bank Loss ($)')
+        axes[0].set_title('Total Bank Loss vs Threshold')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Plot 2: Components (Fraud Loss + False Alarm Cost)
+        axes[1].plot(df["threshold"], df["Fraud_Loss_($)"], linewidth=2, label="Fraud Loss", color='orange')
+        axes[1].plot(df["threshold"], df["False_Alarm_Cost_($)"], linewidth=2, label="False Alarm Cost", color='purple')
+        axes[1].axvline(optimal_thresh, color='r', linestyle='--', linewidth=2, 
+                       label=f'Optimal @ {optimal_thresh:.4f}')
+        axes[1].axvline(0.5, color='g', linestyle='--', linewidth=1, alpha=0.7, label='Default @ 0.5')
+        axes[1].set_xlabel('Threshold')
+        axes[1].set_ylabel('Loss ($)')
+        axes[1].set_title('Loss Components vs Threshold')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path)
+            print(f"Saved threshold sweep plot to {save_path}")
+        
+        plt.show()
+        
+        print(f"\nOptimal Threshold: {optimal_thresh:.4f}")
+        print(f"Optimal Total Bank Loss: ${optimal_loss:,.2f}")
+        print(f"\nAt optimal threshold:")
+        print(f"  Fraud Loss: ${df.loc[optimal_idx, 'Fraud_Loss_($)']:,.2f}")
+        print(f"  False Alarm Cost: ${df.loc[optimal_idx, 'False_Alarm_Cost_($)']:,.2f}")
+        print(f"  Recall: {df.loc[optimal_idx, 'recall']:.4f}")
+        print(f"  F1: {df.loc[optimal_idx, 'f1']:.4f}")
+        
+        return df, optimal_thresh
