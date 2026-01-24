@@ -338,6 +338,8 @@ def train_logistic_regression(
 def evaluate_on_test_set(
     X_test: pd.DataFrame | None = None,
     y_test: pd.Series | None = None,
+    X_train: pd.DataFrame | None = None,
+    y_train: pd.Series | None = None,
     models_dir: str = "models",
     test_size: float = 0.25,
     random_state: int = 42,
@@ -351,9 +353,14 @@ def evaluate_on_test_set(
     Runs both MLMetricsEvaluator (test_classifier, plot_roc_curves) and
     ValueAwareEvaluator (cost-based metrics) on the test set.
     
+    Threshold sweep is performed on training data to find optimal threshold,
+    then that threshold is applied to test set for evaluation.
+    
     Args:
         X_test: Test feature data. If None, will prepare test set using prepare_data().
         y_test: Test target labels. If None, will prepare test set using prepare_data().
+        X_train: Training feature data. If None, will prepare using prepare_data().
+        y_train: Training target labels. If None, will prepare using prepare_data().
         models_dir: Directory containing saved model pickle files (default "models")
         test_size: Proportion of data to use for testing (default 0.25). Only used if X_test/y_test are None.
         random_state: Random seed for reproducibility. Only used if X_test/y_test are None.
@@ -366,14 +373,15 @@ def evaluate_on_test_set(
     print("=" * 60)
     print("Loading existing models from models/ directory...")
     
-    # Prepare test set if not provided
-    if X_test is None or y_test is None:
-        print("Preparing test set...")
-        _, X_test, _, y_test, _ = prepare_data(
+    # Prepare train/test sets if not provided
+    if X_test is None or y_test is None or X_train is None or y_train is None:
+        print("Preparing train/test sets...")
+        X_train, X_test, y_train, y_test, _ = prepare_data(
             test_size=test_size,
             random_state=random_state,
         )
-        print(f"Test set prepared: {len(X_test)} samples")
+        print(f"Training set: {len(X_train)} samples")
+        print(f"Test set: {len(X_test)} samples")
     
     # Load models
     model_filenames = {
@@ -492,15 +500,34 @@ def evaluate_on_test_set(
             print(f"  Accuracy: {results_dynamic['accuracy']:.4f}")
             print(f"  F1: {results_dynamic['f1']:.4f}")
             
-            # Threshold sweep visualization
-            print(f"\n--- Threshold Sweep Analysis for {name} ---")
+            # Threshold sweep on TRAINING set 
+            print(f"\n--- Threshold Sweep Analysis for {name} (on Training Set) ---")
+            y_prob_train = model.predict_proba(X_train)[:, 1]
             sweep_path = RESULTS_DIR / f"{name}_threshold_sweep.png"
             sweep_df, optimal_thresh = value_evaluator.plot_threshold_sweep(
-                y_true=y_test,
-                y_pred_prob=y_prob,
-                X_features=X_test,
+                y_true=y_train,
+                y_pred_prob=y_prob_train,
+                X_features=X_train,
                 n_thresholds=200,
                 save_path=sweep_path,
             )
+            
+            # Apply optimal threshold from training to TEST set
+            print(f"\n--- Applying Optimal Threshold ({optimal_thresh:.4f}) to Test Set ---")
+            results_optimal_test = value_evaluator.evaluate(
+                y_true=y_test,
+                y_pred_prob=y_prob,
+                X_features=X_test,
+                threshold_method="static",
+                static_threshold=optimal_thresh,
+            )
+            print(f"Test Set Results with Optimal Threshold:")
+            print(f"  Total Bank Loss: ${results_optimal_test['Total_Bank_Loss_($)']:,.2f}")
+            print(f"  Fraud Loss: ${results_optimal_test['Fraud_Loss_($)']:,.2f}")
+            print(f"  False Alarm Cost: ${results_optimal_test['False_Alarm_Cost_($)']:,.2f}")
+            print(f"  Fraud Caught: ${results_optimal_test['Fraud_Caught_($)']:,.2f}")
+            print(f"  Recall: {results_optimal_test['recall']:.4f}")
+            print(f"  Accuracy: {results_optimal_test['accuracy']:.4f}")
+            print(f"  F1: {results_optimal_test['f1']:.4f}")
     else:
         print("\nWarning: 'proposed_credit_limit' not found in test set. Skipping Value-Aware evaluation.")
