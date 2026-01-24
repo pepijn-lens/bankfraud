@@ -39,7 +39,7 @@ class MLMetricsEvaluator:
 
         return recall
 
-    def plot_con_matrix(self, ax, y_test, y_pred, title):
+    def plot_con_matrix(self, ax, y_test, y_pred, title, total_loss=None):
         """Plot confusion matrix on given axes."""
         classes = ['No Fraud', 'Fraud']
 
@@ -65,7 +65,10 @@ class MLMetricsEvaluator:
 
         ax.set_xlabel('Predicted label')
         ax.set_ylabel('True label')
-        ax.set_title(f'{title} with {fpr*100:.2f}% FPR')
+        if total_loss is not None:
+            ax.set_title(f'{title}\nTotal Bank Loss: ${total_loss:,.2f}')
+        else:
+            ax.set_title(f'{title} with {fpr*100:.2f}% FPR')
 
     def print_cv_results(self, model):
         """Print cross-validation results from a search object."""
@@ -206,10 +209,34 @@ class MLMetricsEvaluator:
         default_recall = self.print_cls_report(y_test, y_pred, title="Default Threshold @ 0.50")
         target_recall = self.print_cls_report(y_test, y_pred_threshold, title=threshold_label)
 
+        # Compute total bank loss for both thresholds if value_evaluator is available
+        default_total_loss = None
+        optimal_total_loss = None
+        if value_evaluator is not None and "proposed_credit_limit" in X_test.columns:
+            # Default threshold (0.5)
+            default_results = value_evaluator.evaluate(
+                y_true=y_test,
+                y_pred_prob=y_prob,
+                X_features=X_test,
+                threshold_method="static",
+                static_threshold=0.5,
+            )
+            default_total_loss = default_results['Total_Bank_Loss_($)']
+            
+            # Optimal threshold
+            optimal_results = value_evaluator.evaluate(
+                y_true=y_test,
+                y_pred_prob=y_prob,
+                X_features=X_test,
+                threshold_method="static",
+                static_threshold=va_threshold,
+            )
+            optimal_total_loss = optimal_results['Total_Bank_Loss_($)']
+
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
         
-        self.plot_con_matrix(ax1, y_test, y_pred, title='Default Threshold @ 0.50')
-        self.plot_con_matrix(ax2, y_test, y_pred_threshold, title=threshold_label)
+        self.plot_con_matrix(ax1, y_test, y_pred, title='Default Threshold @ 0.50', total_loss=default_total_loss)
+        self.plot_con_matrix(ax2, y_test, y_pred_threshold, title=threshold_label, total_loss=optimal_total_loss)
 
         plt.tight_layout()
         plt.show()
