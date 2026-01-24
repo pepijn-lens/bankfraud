@@ -5,7 +5,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from src.binning import BinningStrat, BinningTransformer
 from src.constants import DATA_DIR, TARGET_COL
-from src.load_data import preprocess_global, preprocess_fold, prepare_data
+from src.load_data import preprocess_global, preprocess_fold
 from src.models import get_base_model, get_random_forest, get_xgb_model
 from src.evaluation import ValueAwareEvaluator
 from src.training import train_and_save_classifiers, evaluate_on_test_set, train_logistic_regression
