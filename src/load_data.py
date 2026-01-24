@@ -5,8 +5,6 @@ import seaborn as sns
 import kagglehub
 import pandas as pd
 import numpy as np
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
 
 from src.constants import RESULTS_DIR, TARGET_COL
 
@@ -60,54 +58,6 @@ def preprocess_global(df: pd.DataFrame) -> pd.DataFrame:
     df = pd.get_dummies(df, columns=categorical_types, drop_first=True)
 
     return df
-
-def is_binary_int_col(s: pd.Series) -> bool:
-    unique_vals = pd.Series(s.unique())
-    if len(unique_vals) > 2:
-        return False
-    return set(unique_vals).issubset({0, 1})
-
-def preprocess_fold(
-        X_train: pd.DataFrame,
-        X_val: pd.DataFrame,
-        X_test: pd.DataFrame,
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Applies stateful transformations (Imputation, Scaling) fitting ONLY on X_train."""
-
-    # Make copies to avoid side effects
-    X_train_proc = X_train.copy()
-    X_val_proc = X_val.copy()
-    X_test_proc = X_test.copy()
-
-    # Impute columns
-    impute_cols = [
-        "credit_risk_score",
-        "device_distinct_emails_8w",
-        "session_length_in_minutes",
-        "current_address_months_count"
-    ]
-    impute_cols = [c for c in impute_cols if c in X_train.columns]
-
-    if impute_cols:
-        imputer = SimpleImputer(missing_values=-1, strategy='median')
-        imputer.fit(X_train_proc[impute_cols])
-        X_train_proc[impute_cols] = imputer.transform(X_train_proc[impute_cols])
-        X_val_proc[impute_cols] = imputer.transform(X_val_proc[impute_cols])
-        X_test_proc[impute_cols] = imputer.transform(X_test_proc[impute_cols])
-
-    # Scale columns
-    numeric_cols = X_train_proc.select_dtypes(include=[np.number]).columns
-    continuous_cols = [col for col in numeric_cols if not is_binary_int_col(X_train_proc[col])]
-
-    if continuous_cols:
-        scaler = StandardScaler()
-        scaler.fit(X_train_proc[continuous_cols])
-        X_train_proc[continuous_cols] = scaler.transform(X_train_proc[continuous_cols])
-        X_val_proc[continuous_cols] = scaler.transform(X_val_proc[continuous_cols])
-        X_test_proc[continuous_cols] = scaler.transform(X_test_proc[continuous_cols])
-
-    return X_train_proc, X_val_proc, X_test_proc
-
 
 def plot_graphs(df: pd.DataFrame) -> None:
     # Numeric features to plot (exclude target)
