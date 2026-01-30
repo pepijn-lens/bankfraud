@@ -28,3 +28,39 @@ X_train, X_val, X_test, y_train, y_val, y_test = split_data(df_prep)
 # 3) Normalize continuous features using statistics from X_train
 X_train_norm, X_val_norm, X_test_norm, scaler = normalize(X_train, X_val, X_test)
 ```
+
+## Training and Loading Classifiers
+
+### Training
+
+Classifiers are trained in `src/training.py` using a 75/25 stratified train/test split:
+
+- **Tree-based models** (RandomForest, XGBoost): Use `train_and_save_classifiers()` which performs hyperparameter tuning with `RandomizedSearchCV` and cross-validation. SMOTENC is applied inside the CV pipeline to avoid data leakage. ⚠️ **Warning**: This takes 2-6+ hours to complete. Models are saved to `models/rf_model.pkl` and `models/xgb_model.pkl`.
+
+- **Logistic Regression**: Use `train_logistic_regression()` which applies SMOTENC and trains a logistic regression model. Saved to `models/lr_model.pkl`.
+
+### Loading Models
+
+Models are saved as pickle files in the `models/` directory. To load a model:
+
+```python
+import pickle
+from pathlib import Path
+
+# Load a specific model
+with open(Path("models/rf_model.pkl"), "rb") as f:
+    model = pickle.load(f)
+
+# Or use evaluate_on_test_set() which automatically loads all available models
+from src.training import evaluate_on_test_set
+evaluate_on_test_set()  # Loads models and evaluates on test set
+```
+
+### Test Set Loading
+
+The test set is prepared using `prepare_data()` in `src/training.py`, which:
+1. Loads and preprocesses the data globally
+2. Performs a stratified 75/25 train/test split (same `random_state=42`)
+3. Returns `X_train, X_test, y_train, y_test, encoded_features`
+
+When calling `evaluate_on_test_set()`, if no test set is provided, it automatically calls `prepare_data()` to generate the test set using the same split as training.

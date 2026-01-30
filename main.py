@@ -7,6 +7,9 @@ from src.binning import BinningStrat, BinningTransformer
 from src.constants import DATA_DIR, TARGET_COL
 from src.load_data import preprocess_global
 from src.models import get_base_model, get_random_forest, get_xgb_model
+from src.constants import DATA_DIR, TARGET_COL
+from src.load_data import preprocess_global
+from src.models import get_base_model, get_random_forest, get_xgb_model
 from src.evaluation import ValueAwareEvaluator
 from src.training import train_and_save_classifiers, evaluate_on_test_set, train_logistic_regression
 from src.rq4_analysis import run_rq4_analysis
@@ -254,24 +257,11 @@ def print_age_fairness_summary(results: Dict):
 if __name__ == "__main__":
     # # Run old experiment with underfitted classifiers
     # run_experiment()
-
-    # Models are already saved in the models/ directory and will be automatically
-    # loaded by evaluate_on_test_set() below.
-    #
-    # Only uncomment the line below if you need to retrain models with different
-    # hyperparameters or if models are missing.
-    # fitted_models, X_test, y_test = train_and_save_classifiers()
     
-    # Evaluate on test set (automatically loads existing models from models/ directory)
-    evaluate_on_test_set()
-
-    # RQ4 - Missed fraud among low value cases due to loss minimisation
-    run_rq4_analysis()
-    
-    # # Run age fairness analysis (RQ5)
-    # print("\n" + "="*60)
-    # print("RQ5: Age Fairness Analysis")
-    # print("="*60)
+    # Run age fairness analysis (RQ5)
+    print("\n" + "="*60)
+    print("RQ5: Age Fairness Analysis")
+    print("="*60)
     
     # df = pd.read_csv(CONFIG["data_path"])
     # df = preprocess_global(df)

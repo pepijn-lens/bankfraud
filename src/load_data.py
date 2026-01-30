@@ -1,11 +1,12 @@
 import shutil
 from pathlib import Path
-
+import matplotlib.pyplot as plt
+import seaborn as sns
 import kagglehub
 import pandas as pd
 import numpy as np
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
+
+from src.constants import RESULTS_DIR, TARGET_COL
 
 def download_data(output_dir: Path):
     # Download latest version
@@ -58,49 +59,46 @@ def preprocess_global(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def is_binary_int_col(s: pd.Series) -> bool:
-    unique_vals = pd.Series(s.unique())
-    if len(unique_vals) > 2:
-        return False
-    return set(unique_vals).issubset({0, 1})
-
-def preprocess_fold(
-        X_train: pd.DataFrame,
-        X_val: pd.DataFrame,
-        X_test: pd.DataFrame,
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Applies stateful transformations (Imputation, Scaling) fitting ONLY on X_train."""
-
-    # Make copies to avoid side effects
-    X_train_proc = X_train.copy()
-    X_val_proc = X_val.copy()
-    X_test_proc = X_test.copy()
-
-    # Impute columns
-    impute_cols = [
-        "credit_risk_score",
-        "device_distinct_emails_8w",
-        "session_length_in_minutes",
-        "current_address_months_count"
+def plot_graphs(df: pd.DataFrame) -> None:
+    # Numeric features to plot (exclude target)
+    numeric_features = [
+        c for c in df.select_dtypes(include=[np.number]).columns
+        if df[c].nunique() >= 10
     ]
-    impute_cols = [c for c in impute_cols if c in X_train.columns]
+    n_features = len(numeric_features)
+    ncols = 3
+    nrows = (n_features + ncols - 1) // ncols
 
-    if impute_cols:
-        imputer = SimpleImputer(missing_values=-1, strategy='median')
-        imputer.fit(X_train_proc[impute_cols])
-        X_train_proc[impute_cols] = imputer.transform(X_train_proc[impute_cols])
-        X_val_proc[impute_cols] = imputer.transform(X_val_proc[impute_cols])
-        X_test_proc[impute_cols] = imputer.transform(X_test_proc[impute_cols])
+    # KDE plots
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 4 * nrows))
+    fig.suptitle('Distribution of Numeric Features by Fraud Status')
+    if nrows == 1:
+        axes = axes.reshape(1, -1)
+    for i, feature in enumerate(numeric_features):
+        ax = axes[i // ncols, i % ncols]
+        sns.kdeplot(data=df[df['fraud_bool'] == 0][feature], fill=True, ax=ax, label='Not Fraud', warn_singular=False)
+        sns.kdeplot(data=df[df['fraud_bool'] == 1][feature], fill=True, ax=ax, label='Fraud', warn_singular=False)
+        ax.set_xlabel(feature)
+        ax.legend()
+    for j in range(n_features, nrows * ncols):
+        axes.flat[j].set_visible(False)
 
-    # Scale columns
-    numeric_cols = X_train_proc.select_dtypes(include=[np.number]).columns
-    continuous_cols = [col for col in numeric_cols if not is_binary_int_col(X_train_proc[col])]
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "distribution_of_numeric_features.png")
 
-    if continuous_cols:
-        scaler = StandardScaler()
-        scaler.fit(X_train_proc[continuous_cols])
-        X_train_proc[continuous_cols] = scaler.transform(X_train_proc[continuous_cols])
-        X_val_proc[continuous_cols] = scaler.transform(X_val_proc[continuous_cols])
-        X_test_proc[continuous_cols] = scaler.transform(X_test_proc[continuous_cols])
+    # Box plots
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 4 * nrows))
+    fig.suptitle('Box Plot of Numeric Features by Fraud Status')
+    if nrows == 1:
+        axes = axes.reshape(1, -1)
+    for i, feature in enumerate(numeric_features):
+        ax = axes[i // ncols, i % ncols]
+        sns.boxplot(data=df, x='fraud_bool', y=feature, ax=ax, boxprops=dict(alpha=.6))
+        ax.set_xlabel('')
+        ax.set_ylabel(feature)
+        ax.set_xticklabels(['Not Fraud', 'Fraud'])
+    for j in range(n_features, nrows * ncols):
+        axes.flat[j].set_visible(False)
 
-    return X_train_proc, X_val_proc, X_test_proc
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "boxplots_of_numeric_features.png")

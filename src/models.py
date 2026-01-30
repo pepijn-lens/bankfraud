@@ -1,6 +1,6 @@
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-import lightgbm as lgb
+from xgboost import XGBClassifier
 
 def get_base_model():
     """Returns the baseline Logistic Regression model."""
@@ -10,15 +10,24 @@ def get_base_model():
 def get_random_forest():
     """Returns a Random Forest classifier."""
     return RandomForestClassifier(
-        n_estimators=300,
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        class_weight="balanced",
+        n_estimators=100,
+        max_features='sqrt',
+        max_depth=10,
+        criterion='gini',
         random_state=42,
         n_jobs=-1
     )
 
-def get_lgbm_model():
-    """Returns the LightGBM model."""
-    return lgb.LGBMClassifier(random_state=42, class_weight='balanced', verbose=-1)
+
+def get_xgb_model():
+    """Returns the XGBoost model."""
+    return XGBClassifier(
+        random_state=42,
+        n_jobs=-1,
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        min_child_weight=4,
+        subsample=0.8,
+        colsample_bytree=0.6
+    )

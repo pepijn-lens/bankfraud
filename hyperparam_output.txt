@@ -1,0 +1,161 @@
+============================================================
+Training Tree-Based Classifiers with Cross-Validation
+============================================================
+Dropping constant columns: ['device_fraud_count']
+Training set samples per class: Counter({0: 741728, 1: 8272})
+Test set samples per class: Counter({0: 247243, 1: 2757})
+Encoded feature indices (2 <= nunique < 10): [0, 4, 14, 15, 16, 18, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+
+============================================================
+Training RandomForest with random search...
+============================================================
+
+Best CV score (ROC-AUC): 0.8499
+Best parameters: {'randomforestclassifier__n_estimators': 100, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 10, 'randomforestclassifier__criterion': 'gini'}
+
+CV Results for RandomForest:
+mean_test_score: 0.849903, params: {'randomforestclassifier__n_estimators': 100, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 10, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: nan, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 4, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.849323, params: {'randomforestclassifier__n_estimators': 80, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 8, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.847420, params: {'randomforestclassifier__n_estimators': 100, 'randomforestclassifier__max_features': 'log2', 'randomforestclassifier__max_depth': 8, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.847246, params: {'randomforestclassifier__n_estimators': 80, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 8, 'randomforestclassifier__criterion': 'entropy'}
+mean_test_score: 0.845447, params: {'randomforestclassifier__n_estimators': 80, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 6, 'randomforestclassifier__criterion': 'entropy'}
+mean_test_score: 0.845403, params: {'randomforestclassifier__n_estimators': 60, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 6, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.844924, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 8, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.844168, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 6, 'randomforestclassifier__criterion': 'entropy'}
+mean_test_score: 0.843920, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 8, 'randomforestclassifier__criterion': 'entropy'}
+mean_test_score: 0.842811, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 10, 'randomforestclassifier__criterion': 'entropy'}
+mean_test_score: 0.839955, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'log2', 'randomforestclassifier__max_depth': 10, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.837272, params: {'randomforestclassifier__n_estimators': 80, 'randomforestclassifier__max_features': 'log2', 'randomforestclassifier__max_depth': 4, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.821745, params: {'randomforestclassifier__n_estimators': 20, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 2, 'randomforestclassifier__criterion': 'gini'}
+mean_test_score: 0.820091, params: {'randomforestclassifier__n_estimators': 80, 'randomforestclassifier__max_features': 'sqrt', 'randomforestclassifier__max_depth': 2, 'randomforestclassifier__criterion': 'entropy'}
+
+============================================================
+Training XGBoost with random search...
+============================================================
+
+Best CV score (ROC-AUC): 0.8464
+Best parameters: {'xgbclassifier__subsample': 0.8, 'xgbclassifier__n_estimators': 20, 'xgbclassifier__min_child_weight': 4, 'xgbclassifier__max_depth': 6, 'xgbclassifier__learning_rate': 0.1, 'xgbclassifier__colsample_bytree': 0.6}
+
+CV Results for XGBoost:
+mean_test_score: 0.846355, params: {'xgbclassifier__subsample': 0.8, 'xgbclassifier__n_estimators': 20, 'xgbclassifier__min_child_weight': 4, 'xgbclassifier__max_depth': 6, 'xgbclassifier__learning_rate': 0.1, 'xgbclassifier__colsample_bytree': 0.6}
+mean_test_score: 0.842710, params: {'xgbclassifier__subsample': 1.0, 'xgbclassifier__n_estimators': 40, 'xgbclassifier__min_child_weight': 3, 'xgbclassifier__max_depth': 2, 'xgbclassifier__learning_rate': 0.2, 'xgbclassifier__colsample_bytree': 0.8}
+mean_test_score: 0.842321, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 100, 'xgbclassifier__min_child_weight': 3, 'xgbclassifier__max_depth': 10, 'xgbclassifier__learning_rate': 0.05, 'xgbclassifier__colsample_bytree': 0.8}
+mean_test_score: 0.841772, params: {'xgbclassifier__subsample': 1.0, 'xgbclassifier__n_estimators': 40, 'xgbclassifier__min_child_weight': 2, 'xgbclassifier__max_depth': 10, 'xgbclassifier__learning_rate': 0.15, 'xgbclassifier__colsample_bytree': 0.6}
+mean_test_score: 0.840821, params: {'xgbclassifier__subsample': 1.0, 'xgbclassifier__n_estimators': 60, 'xgbclassifier__min_child_weight': 3, 'xgbclassifier__max_depth': 2, 'xgbclassifier__learning_rate': 0.05, 'xgbclassifier__colsample_bytree': 0.8}
+mean_test_score: 0.840552, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 20, 'xgbclassifier__min_child_weight': 2, 'xgbclassifier__max_depth': 8, 'xgbclassifier__learning_rate': 0.2, 'xgbclassifier__colsample_bytree': 0.6}
+mean_test_score: 0.839731, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 40, 'xgbclassifier__min_child_weight': 2, 'xgbclassifier__max_depth': 6, 'xgbclassifier__learning_rate': 0.1, 'xgbclassifier__colsample_bytree': 0.8}
+mean_test_score: 0.839406, params: {'xgbclassifier__subsample': 1.0, 'xgbclassifier__n_estimators': 20, 'xgbclassifier__min_child_weight': 3, 'xgbclassifier__max_depth': 4, 'xgbclassifier__learning_rate': 0.15, 'xgbclassifier__colsample_bytree': 1.0}
+mean_test_score: 0.838115, params: {'xgbclassifier__subsample': 0.8, 'xgbclassifier__n_estimators': 40, 'xgbclassifier__min_child_weight': 3, 'xgbclassifier__max_depth': 4, 'xgbclassifier__learning_rate': 0.05, 'xgbclassifier__colsample_bytree': 0.8}
+mean_test_score: 0.837561, params: {'xgbclassifier__subsample': 1.0, 'xgbclassifier__n_estimators': 40, 'xgbclassifier__min_child_weight': 4, 'xgbclassifier__max_depth': 8, 'xgbclassifier__learning_rate': 0.2, 'xgbclassifier__colsample_bytree': 0.6}
+mean_test_score: 0.834391, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 100, 'xgbclassifier__min_child_weight': 2, 'xgbclassifier__max_depth': 8, 'xgbclassifier__learning_rate': 0.2, 'xgbclassifier__colsample_bytree': 1.0}
+mean_test_score: 0.834245, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 20, 'xgbclassifier__min_child_weight': 3, 'xgbclassifier__max_depth': 2, 'xgbclassifier__learning_rate': 0.1, 'xgbclassifier__colsample_bytree': 0.6}
+mean_test_score: 0.833178, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 80, 'xgbclassifier__min_child_weight': 1, 'xgbclassifier__max_depth': 4, 'xgbclassifier__learning_rate': 0.2, 'xgbclassifier__colsample_bytree': 0.8}
+mean_test_score: 0.832849, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 80, 'xgbclassifier__min_child_weight': 4, 'xgbclassifier__max_depth': 6, 'xgbclassifier__learning_rate': 0.15, 'xgbclassifier__colsample_bytree': 1.0}
+mean_test_score: 0.831228, params: {'xgbclassifier__subsample': 0.6, 'xgbclassifier__n_estimators': 80, 'xgbclassifier__min_child_weight': 2, 'xgbclassifier__max_depth': 6, 'xgbclassifier__learning_rate': 0.2, 'xgbclassifier__colsample_bytree': 1.0}
+
+Saved RandomForest best model to models/rf_model.pkl
+
+Saved XGBoost best model to models/xgb_model.pkl
+============================================================
+Evaluating on Test Set
+============================================================
+Loaded RandomForest from models/rf_model.pkl
+Loaded XGBoost from models/xgb_model.pkl
+
+============================================================
+ML Metrics Evaluation
+============================================================
+
+--- Evaluating RandomForest ---
+Default Threshold
+**************************************************
+              precision    recall  f1-score   support
+
+    No Fraud       0.99      0.93      0.96    247243
+       Fraud       0.07      0.50      0.12      2757
+
+    accuracy                           0.92    250000
+   macro avg       0.53      0.71      0.54    250000
+weighted avg       0.98      0.92      0.95    250000
+
+Target Threshold @ 0.58
+**************************************************
+              precision    recall  f1-score   support
+
+    No Fraud       0.99      0.95      0.97    247243
+       Fraud       0.09      0.42      0.14      2757
+
+    accuracy                           0.94    250000
+   macro avg       0.54      0.68      0.56    250000
+weighted avg       0.98      0.94      0.96    250000
+
+2026-01-23 20:59:47.145 Python[38002:3825482] The class 'NSSavePanel' overrides the method identifier.  This method is implemented by class 'NSWindow'
+
+--- Evaluating XGBoost ---
+Default Threshold
+**************************************************
+              precision    recall  f1-score   support
+
+    No Fraud       0.99      0.92      0.95    247243
+       Fraud       0.07      0.52      0.12      2757
+
+    accuracy                           0.91    250000
+   macro avg       0.53      0.72      0.54    250000
+weighted avg       0.98      0.91      0.95    250000
+
+Target Threshold @ 0.60
+**************************************************
+              precision    recall  f1-score   support
+
+    No Fraud       0.99      0.95      0.97    247243
+       Fraud       0.08      0.41      0.14      2757
+
+    accuracy                           0.94    250000
+   macro avg       0.54      0.68      0.56    250000
+weighted avg       0.98      0.94      0.96    250000
+
+
+--- ROC Curves Comparison ---
+
+============================================================
+Value-Aware Evaluation
+============================================================
+
+--- RandomForest ---
+Static (0.5) Threshold:
+  Total Bank Loss: $3,451,800.00
+  Fraud Loss: $965,740.00
+  False Alarm Cost: $2,486,060.00
+  Fraud Caught: $1,394,050.00
+  Recall: 0.4980
+  Accuracy: 0.9229
+  F1: 0.1248
+
+Value-Aware Threshold:
+  Total Bank Loss: $9,380,154.00
+  Fraud Loss: $180,810.00
+  False Alarm Cost: $9,199,344.00
+  Fraud Caught: $2,178,980.00
+  Recall: 0.7835
+  Accuracy: 0.7455
+  F1: 0.0636
+
+--- XGBoost ---
+Static (0.5) Threshold:
+  Total Bank Loss: $3,705,558.00
+  Fraud Loss: $928,140.00
+  False Alarm Cost: $2,777,418.00
+  Fraud Caught: $1,431,650.00
+  Recall: 0.5234
+  Accuracy: 0.9141
+  F1: 0.1184
+
+Value-Aware Threshold:
+  Total Bank Loss: $11,121,117.00
+  Fraud Loss: $134,110.00
+  False Alarm Cost: $10,987,007.00
+  Fraud Caught: $2,225,680.00
+  Recall: 0.8125
+  Accuracy: 0.6976
+  F1: 0.0559
